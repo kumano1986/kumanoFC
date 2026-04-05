@@ -1,0 +1,2008 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="FC熊野">
+<meta name="theme-color" content="#2d7a4f">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<title>FC熊野 試合結果報告書</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Barlow+Condensed:wght@600;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --green: #2d7a4f;
+  --green2: #1f5a39;
+  --green-light: #e8f5ee;
+  --green-mid: #a8d5b8;
+  --dark: #1a2a1f;
+  --card-bg: #ffffff;
+  --card-border: #c8dcd0;
+  --text: #1a2a1f;
+  --text-muted: #6b7c70;
+  --input-bg: #f0f7f3;
+  --input-border: #c8dcd0;
+  --accent-light: #e8f5ee;
+  --accent-border: #a8d5b8;
+  --red: #c0392b;
+  --body-bg: #f0f4f1;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  background: var(--body-bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
+}
+
+header {
+  background: var(--green);
+  color: white;
+  padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.header-logo-wrap { }
+.logo { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 900; letter-spacing: 2px; color: #fff; }
+.subtitle { font-size: 10px; color: rgba(255,255,255,0.75); margin-top: 1px; letter-spacing: 1px; }
+.header-right { text-align: right; }
+.sync-status { font-size: 10px; color: rgba(255,255,255,0.75); margin-bottom: 3px; }
+.btn-sync {
+  background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.3);
+  padding: 5px 11px; border-radius: 8px; font-size: 12px; cursor: pointer;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+
+.tab-bar {
+  display: flex; background: var(--dark);
+  border-bottom: 2px solid #222;
+  position: sticky; top: 58px; z-index: 99;
+}
+.tab-bar button {
+  flex: 1; padding: 10px 2px; background: none; border: none;
+  color: #555; font-family: 'Noto Sans JP', sans-serif;
+  font-size: 11px; cursor: pointer; border-bottom: 3px solid transparent;
+  white-space: nowrap; transition: all 0.2s;
+}
+.tab-bar button.active { color: var(--green-mid); border-bottom-color: var(--green-mid); font-weight: 700; }
+
+.page { display: none; padding: 14px 13px 80px; }
+.page.active { display: block; }
+
+/* カード */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px; padding: 15px; margin-bottom: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+.card-title {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700;
+  color: var(--green); margin-bottom: 13px; display: flex; align-items: center; gap: 7px;
+  letter-spacing: 0.5px;
+}
+.card-title::before {
+  content: '';
+  display: inline-block; width: 4px; height: 18px;
+  background: var(--green);
+  border-radius: 2px; flex-shrink: 0;
+}
+
+label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; display: block; letter-spacing: 0.3px; }
+input[type=text], input[type=date], select {
+  width: 100%; padding: 9px 11px; border: 1.5px solid var(--input-border);
+  border-radius: 8px; font-family: 'Noto Sans JP', sans-serif; font-size: 14px;
+  background: var(--input-bg); color: var(--text); margin-bottom: 10px;
+  appearance: none; -webkit-appearance: none;
+}
+input:focus, select:focus { outline: none; border-color: var(--green); background: white; }
+.form-row { display: flex; gap: 10px; }
+.form-row > * { flex: 1; }
+
+/* ボタン */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 16px; border-radius: 10px; font-family: 'Noto Sans JP', sans-serif;
+  font-size: 14px; font-weight: 700; cursor: pointer; border: none; transition: all 0.12s;
+}
+.btn:active { transform: scale(0.96); }
+.btn-primary { background: var(--green); color: white; }
+.btn-primary:active { background: var(--green2); }
+.btn-outline { background: white; color: var(--green); border: 1.5px solid var(--green); }
+.btn-dark { background: #f0f0f0; color: var(--text); border: 1px solid #ddd; }
+.btn-sm { padding: 6px 11px; font-size: 12px; border-radius: 8px; }
+.btn-full { width: 100%; margin-top: 6px; }
+.btn-share { background: #0a6e2a; color: white; }
+.btn-pdf { background: #0d3b6e; color: white; }
+
+/* 選手チップ */
+.player-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
+.player-chip {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--accent-light); border: 1px solid var(--accent-border);
+  border-radius: 8px; padding: 8px 10px; font-size: 13px; font-weight: 500;
+}
+.player-chip button { background: none; border: none; color: #aaa; cursor: pointer; font-size: 14px; }
+
+/* 試合カード */
+.match-card {
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 12px; margin-bottom: 12px; overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+.match-header {
+  background: var(--green);
+  padding: 10px 13px; display: flex; justify-content: space-between; align-items: center;
+}
+.match-header-inner { }
+.match-num { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 900; color: white; letter-spacing: 1px; }
+.match-body { padding: 13px; }
+
+/* スコアテーブル */
+.score-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; text-align: center; }
+.score-table th {
+  background: var(--accent-light); color: var(--green); font-size: 11px; font-weight: 700;
+  padding: 6px 3px; border: 1px solid var(--card-border);
+}
+.score-table td { border: 1px solid var(--card-border); padding: 3px 2px; background: white; }
+.score-table td.tname { font-weight: 700; font-size: 11px; background: var(--input-bg); text-align: left; padding-left: 8px; color: var(--text); }
+.score-total {
+  font-weight: 900; font-family: 'Barlow Condensed', sans-serif; font-size: 20px;
+}
+.score-total.kumano { color: var(--green); }
+.score-total.opp { color: #888; }
+
+/* +/- ボタン式スコア入力 */
+.score-stepper {
+  display: flex; align-items: center; justify-content: center; gap: 2px;
+}
+.score-stepper button {
+  background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text);
+  width: 26px; height: 26px; border-radius: 6px; font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-weight: 700;
+  transition: background 0.1s;
+}
+.score-stepper button:active { background: var(--green); color: white; }
+.score-stepper .val {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700;
+  color: var(--text); min-width: 22px; text-align: center;
+}
+
+/* 失点ボタン */
+.concede-row {
+  display: flex; gap: 8px; margin-bottom: 8px; align-items: center;
+}
+.concede-label { font-size: 11px; color: var(--text-muted); min-width: 36px; }
+.btn-concede {
+  background: #fdecea; border: 1px solid #f5c0bb; color: var(--red);
+  padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 700;
+  cursor: pointer; display: flex; align-items: center; gap: 5px;
+  font-family: 'Noto Sans JP', sans-serif; transition: background 0.1s;
+}
+.btn-concede:active { background: #f5c0bb; }
+.btn-concede-minus {
+  background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-muted);
+  padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: 'Noto Sans JP', sans-serif;
+}
+.concede-count {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 700;
+  color: var(--red); min-width: 24px; text-align: center;
+}
+
+/* 得点者 */
+.scorer-row { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+.scorer-row select { margin: 0; flex: 1; font-size: 13px; padding: 7px 8px; }
+.pbadge {
+  background: var(--accent-light); color: var(--green); border: 1px solid var(--accent-border);
+  border-radius: 6px; padding: 3px 7px; font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.scorer-row button { background: none; border: none; color: #aaa; cursor: pointer; font-size: 18px; line-height: 1; }
+
+/* 結果バッジ */
+.result-badge { display: inline-block; padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; margin-top: 6px; }
+.r-win { background: var(--accent-light); color: var(--green); border: 1px solid var(--accent-border); }
+.r-lose { background: #fdecea; color: var(--red); border: 1px solid #f5c0bb; }
+.r-draw { background: #fef9e7; color: #b7950b; border: 1px solid #f9e79f; }
+
+/* サマリー */
+.summary-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--card-border); font-size: 14px; }
+.summary-row:last-child { border-bottom: none; }
+.summary-row .lbl { color: var(--text-muted); }
+.summary-row .val { font-weight: 700; }
+.wc { color: var(--green); } .lc { color: var(--red); } .dc { color: #b7950b; }
+
+.sbar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.sbar-row .sname { font-size: 13px; min-width: 65px; color: var(--text); }
+.sbar { flex: 1; height: 14px; background: var(--green-light); border-radius: 7px; overflow: hidden; }
+.sbar-fill { height: 100%; background: var(--green); border-radius: 7px; }
+.sbar-row .scnt { font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; color: var(--green); min-width: 20px; }
+
+/* 接続バッジ */
+.conn-ok { display:inline-flex;align-items:center;gap:4px;background:var(--accent-light);color:var(--green);border:1px solid var(--accent-border);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700; }
+.conn-ng { display:inline-flex;align-items:center;gap:4px;background:#fdecea;color:var(--red);border:1px solid #f5c0bb;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700; }
+
+/* 設定手順 */
+.setup-step { display:flex;gap:11px;margin-bottom:14px;align-items:flex-start; }
+.step-num {
+  background: var(--green); color: white; border-radius: 50%; width:26px;height:26px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;flex-shrink:0;margin-top:2px;
+}
+.step-title { font-size:13px;font-weight:700;margin-bottom:3px;color:var(--text); }
+.step-desc { font-size:12px;color:var(--text-muted);line-height:1.7; }
+
+/* 年度セレクター */
+.nendo-tabs { display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px; }
+.nendo-tab {
+  padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;
+  background:white;color:var(--text-muted);border:1px solid var(--card-border);
+  font-family:'Noto Sans JP',sans-serif;
+}
+.nendo-tab.active { background:var(--green);color:white;border-color:var(--green); }
+
+/* インストールバナー */
+#install-banner {
+  background:var(--dark);color:white;padding:10px 14px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  border-bottom:1px solid #1f3a28;
+}
+#install-banner .msg { font-size:12px;flex:1; }
+#install-banner .btn-inst { background:var(--green);color:white;border:none;padding:6px 13px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer; }
+#install-banner .cls { background:none;color:rgba(255,255,255,0.4);border:none;font-size:16px;cursor:pointer;padding:2px 6px; }
+
+/* セクションラベル */
+.slabel { font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;margin:10px 0 5px; }
+
+/* 印刷 */
+@media print {
+  header,.tab-bar,.btn,.add-btn-row,#page-summary,#install-banner { display:none!important; }
+  #page-report { display:block!important;padding:0; }
+  body { background:white;color:#000; }
+  .match-card,.card { box-shadow:none;border:1px solid #ccc;page-break-inside:avoid;background:white; }
+  .match-header { background:#2d7a4f!important;-webkit-print-color-adjust:exact;print-color-adjust:exact; }
+}
+
+.empty-state { text-align:center;color:var(--text-muted);padding:24px;font-size:13px; }
+.add-btn-row { text-align:center;margin:8px 0; }
+
+.toast {
+  position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
+  background:var(--dark);color:white;padding:10px 20px;border-radius:20px;
+  font-size:13px;z-index:999;opacity:0;transition:opacity 0.3s;pointer-events:none;
+  white-space:nowrap;
+}
+.toast.show { opacity:1; }
+
+/* pulse animation for concede button */
+@keyframes pulse { 0%{transform:scale(1)}50%{transform:scale(1.12)}100%{transform:scale(1)} }
+.pulse { animation: pulse 0.25s ease; }
+</style>
+</head>
+<body>
+
+<div id="install-banner" style="display:none;">
+  <span class="msg">📱 ホーム画面に追加してアプリとして使えます</span>
+  <button class="btn-inst" onclick="installApp()">追加する</button>
+  <button class="cls" onclick="this.parentElement.style.display='none'">✕</button>
+</div>
+
+<header>
+  <div class="header-logo-wrap">
+    <div class="logo">⚽ FC KUMANO</div>
+  </div>
+  <div class="header-right" style="display:flex;align-items:center;gap:6px;">
+    <a href="https://drive.google.com/drive/folders/1h8i6Sqm-eTWXCB5qVeyZpfN8bJ4ho0Gk" target="_blank" style="background:rgba(255,255,255,0.18);color:white;border:1px solid rgba(255,255,255,0.3);padding:5px 10px;border-radius:8px;font-size:11px;font-family:'Noto Sans JP',sans-serif;text-decoration:none;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;line-height:1;">
+      <svg width="14" height="14" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+        <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+        <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+        <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+        <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+        <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+        <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+      </svg>
+      Googleドライブ
+    </a>
+    <button class="btn-sync" onclick="syncAll()" style="line-height:1;">🔄</button>
+    <button onclick="openSettings()" style="background:rgba(255,255,255,0.18);color:white;border:1px solid rgba(255,255,255,0.3);padding:5px 10px;border-radius:8px;font-size:16px;cursor:pointer;line-height:1;">⚙️</button>
+  </div>
+</header>
+
+<div class="tab-bar">
+  <button class="active" onclick="showPage('report',this)">📋 試合</button>
+  <button onclick="showPage('result',this)">🏆 試合結果</button>
+  <button onclick="showPage('attendance',this)">📅 出欠確認</button>
+  <button onclick="showPage('duty',this)">🔔 当番</button>
+  <button onclick="showPage('summary',this)">📊 まとめ</button>
+</div>
+
+<!-- ===== 設定モーダル ===== -->
+<!-- ===== 家族選択モーダル（初回） ===== -->
+<div id="modal-select-family" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:400;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:16px;padding:24px 20px;width:88%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+    <div style="text-align:center;margin-bottom:18px;">
+      <div style="font-size:28px;margin-bottom:8px;">👋</div>
+      <div style="font-size:18px;font-weight:700;color:var(--green);">あなたはどの家族ですか？</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">選択するとこのスマホに記憶されます</div>
+    </div>
+    <div id="family-select-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
+<div id="modal-settings" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:flex-start;overflow-y:auto;">
+  <div style="background:var(--body-bg);min-height:100%;width:100%;padding:0 0 40px;">
+    <div style="background:var(--green);padding:16px 16px 14px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:17px;font-weight:700;color:white;">⚙️ 設定・マスタ管理</div>
+      <button onclick="closeModal('modal-settings')" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:18px;border-radius:8px;padding:4px 10px;cursor:pointer;">✕</button>
+    </div>
+    <div style="padding:12px;">
+      <!-- 自分の家族 -->
+      <div class="card" style="border:2px solid var(--green);">
+        <div class="card-title">👤 自分の家族</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認で自分の行だけ入力できます</div>
+        <div id="my-family-display" style="font-size:16px;font-weight:700;color:var(--green);margin-bottom:12px;"></div>
+        <button class="btn btn-outline btn-full" onclick="showFamilySelectModal()">家族名を変更する</button>
+      </div>
+      <!-- 選手登録 -->
+      <div class="card">
+        <div class="card-title">⚽ 選手を登録</div>
+        <label>選手名</label>
+        <input type="text" id="input-name" placeholder="例: メッシ">
+        <button class="btn btn-primary btn-full" onclick="addPlayer()">＋ 選手を追加</button>
+        <div id="player-list" style="margin-top:10px;"><div class="empty-state">まだ選手が登録されていません</div></div>
+        <div style="font-size:12px;color:var(--text-muted);text-align:right;margin-top:6px;" id="player-count"></div>
+      </div>
+      <!-- 家族管理 -->
+      <div class="card">
+        <div class="card-title">👨‍👩‍👧 家族を登録</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">出欠確認・当番で使用する家族名を管理します</div>
+        <label>家族名</label>
+        <input type="text" id="input-family" placeholder="例: 田中">
+        <button class="btn btn-primary btn-full" onclick="addFamily()">＋ 家族を追加</button>
+        <div id="family-list" style="margin-top:10px;"><div class="empty-state">読み込み中...</div></div>
+        <div style="font-size:12px;color:var(--text-muted);text-align:right;margin-top:6px;" id="family-count"></div>
+      </div>
+      <!-- Google連携 -->
+      <div class="card">
+        <div class="card-title">Google連携設定</div>
+        <div id="conn-badge" class="conn-ng" style="margin-bottom:12px;">● 未接続</div>
+        <label>GAS WebアプリURL</label>
+        <input type="text" id="gas-url" placeholder="https://script.google.com/macros/s/..." oninput="saveGasUrl()">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:-6px;margin-bottom:12px;">Apps ScriptのデプロイURLを貼り付けてください</div>
+        <button class="btn btn-primary btn-full" onclick="testConnection()">🔌 接続テスト</button>
+      </div>
+      <!-- ホーム画面追加 -->
+      <div class="card">
+        <div class="card-title">📱 ホーム画面への追加</div>
+        <div style="font-size:13px;line-height:1.9;color:var(--text);">
+          <b>iPhone (Safari)</b><br>
+          下の共有ボタン(□↑) → 「ホーム画面に追加」<br><br>
+          <b>Android (Chrome)</b><br>
+          画面上のバナー「追加する」または メニュー(⋮) → 「ホーム画面に追加」
+        </div>
+      </div>
+      <!-- 出欠一括締め切り -->
+      <div class="card">
+        <div class="card-title">🔒 出欠確認の締め切り</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">全日程の出欠入力を締め切ります。締め切り後は◯△×の変更ができなくなります。</div>
+        <button class="btn btn-full" onclick="lockAllSchedules()" style="background:#c0392b;color:white;font-weight:700;margin-bottom:8px;">🔒 全日程を締め切る</button>
+        <button class="btn btn-outline btn-full" onclick="unlockAllSchedules()">🔓 全日程のロックを解除</button>
+      </div>
+      <!-- 日程一括削除 -->
+      <div class="card">
+        <div class="card-title">🗑 日程の一括削除</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認タブのすべての日程カードを削除します。出欠データも合わせてリセットされます。</div>
+        <button type="button" class="btn btn-full" onclick="deleteAllSchedules()" style="background:#888;color:white;font-weight:700;border:none;cursor:pointer;">🗑 全日程を削除する</button>
+      </div>
+      <!-- GAS手順 -->
+      <div class="card">
+        <div class="card-title">GAS設定手順</div>
+        <div class="setup-step"><div class="step-num">1</div><div><div class="step-title">Googleスプレッドシートを作成</div><div class="step-desc">Googleドライブで新規スプレッドシートを作成</div></div></div>
+        <div class="setup-step"><div class="step-num">2</div><div><div class="step-title">Apps Scriptを開く</div><div class="step-desc">メニュー「拡張機能」→「Apps Script」</div></div></div>
+        <div class="setup-step"><div class="step-num">3</div><div><div class="step-title">gas_script.jsを貼り付けて保存</div><div class="step-desc">同梱の gas_script.js の内容をエディタに貼り付けて保存</div></div></div>
+        <div class="setup-step"><div class="step-num">4</div><div><div class="step-title">デプロイ</div><div class="step-desc">「デプロイ」→「新しいデプロイ」→ 種類：ウェブアプリ → アクセス：<b>全員</b> → デプロイ → URLをコピー</div></div></div>
+        <div class="setup-step"><div class="step-num">5</div><div><div class="step-title">URLを上に貼り付けて接続テスト</div><div class="step-desc">✅ 接続成功で設定完了！</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 試合記録 ===== -->
+<div id="page-report" class="page active">
+  <div class="card">
+    <div class="card-title">基本情報</div>
+    <label>日時</label>
+    <input type="date" id="report-date" oninput="saveReportMeta()" style="margin-bottom:0;">
+  </div>
+  <div id="match-list"></div>
+  <div class="add-btn-row">
+    <button class="btn btn-outline" onclick="addMatch()">＋ 試合を追加</button>
+  </div>
+  <button class="btn btn-full" onclick="submitToSummary()" style="margin-top:8px;background:#e74c3c;color:white;font-weight:700;font-size:15px;padding:14px;border:none;border-radius:10px;cursor:pointer;">
+    🏁 試合が終わったら押してください
+  </button>
+  <div style="margin-top:8px;">
+    <button class="btn btn-share btn-full" onclick="showPage('result', document.querySelector('.tab-bar button:nth-child(2)'))">🏆 試合結果を確認・共有</button>
+  </div>
+</div>
+
+<!-- ===== 試合結果 ===== -->
+<div id="page-result" class="page">
+  <div id="result-share-card" style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.12);margin-bottom:12px;">
+    <div style="background:var(--green);padding:14px 16px 12px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:white;letter-spacing:1px;">⚽ FC KUMANO</div>
+      <div id="rs-meta" style="font-size:11px;color:rgba(255,255,255,0.85);margin-top:3px;"></div>
+    </div>
+    <div id="rs-matches" style="padding:12px 14px;"></div>
+  </div>
+  <div style="background:#f8f8f8;border-radius:12px;padding:12px 14px;margin-bottom:10px;font-size:12px;color:var(--text-muted);line-height:1.7;">
+    📸 <b>スクショ→LINE送信の手順</b><br>
+    ① 上の結果カードをスクリーンショット<br>
+    ② LINEを開いてトークルームに画像を送信
+  </div>
+  <button class="btn btn-share btn-full" onclick="shareResult()">📤 LINEで共有</button>
+</div>
+
+<!-- ===== 出欠確認 ===== -->
+<div id="page-attendance" class="page">
+  <!-- コントロールバー -->
+  <div class="card" style="padding:12px 14px;">
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="btn btn-primary btn-sm" onclick="showAddScheduleModal()" style="flex:1;">＋ 日程追加</button>
+      <button class="btn btn-outline btn-sm" onclick="showArchiveModal()" style="flex:1;">📦 アーカイブ</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div id="att-my-family-badge" style="font-size:12px;font-weight:700;color:var(--green);"></div>
+      <div id="sync-indicator" style="font-size:10px;color:var(--text-muted);">自動同期: 5秒ごと</div>
+    </div>
+  </div>
+  <div id="attendance-list"></div>
+
+  <!-- 日程追加モーダル -->
+  <div id="modal-add-schedule" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:flex-end;">
+    <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-height:85vh;overflow-y:auto;">
+      <div style="font-weight:700;font-size:16px;color:var(--green);margin-bottom:12px;">📅 日程を追加</div>
+
+      <!-- タブ切り替え -->
+      <div style="display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid var(--card-border);">
+        <button id="tab-manual" onclick="switchAddTab('manual')" style="flex:1;padding:7px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--green);border-bottom:2px solid var(--green);margin-bottom:-2px;">手動入力</button>
+        <button id="tab-excel" onclick="switchAddTab('excel')" style="flex:1;padding:7px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-2px;">📊 Excelから取込</button>
+      </div>
+
+      <!-- 手動入力 -->
+      <div id="add-tab-manual">
+        <label>日付</label>
+        <input type="date" id="new-sched-date" style="margin-bottom:10px;">
+        <label>学年</label>
+        <select id="new-sched-grade" style="margin-bottom:10px;">
+          <option>全学年</option>
+          <option>キッズ</option>
+          <option>1年</option>
+          <option>2年</option>
+          <option>3年</option>
+          <option>4年</option>
+          <option>5年</option>
+          <option>6年</option>
+          <option>1・2年</option>
+          <option>2・3年</option>
+          <option>1・2・3年</option>
+          <option>4・5・6年</option>
+        </select>
+        <label>場所・時間</label>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          <select id="new-sched-venue" style="flex:1;margin-bottom:0;">
+            <option value="">選択または入力</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="showAddVenueInput()">＋</button>
+        </div>
+        <div id="new-venue-input-area" style="display:none;margin-bottom:10px;">
+          <input type="text" id="new-venue-text" placeholder="例: 高島平多目的 8:50~11:00">
+          <button class="btn btn-primary btn-sm" onclick="addNewVenue()" style="margin-top:4px;width:100%;">場所を登録して選択</button>
+        </div>
+        <label>備考（任意）</label>
+        <input type="text" id="new-sched-note" placeholder="例: ★学年当番★" style="margin-bottom:6px;">
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;color:var(--text);">
+          <input type="checkbox" id="new-sched-carpool" style="width:auto;margin:0;"> 配車あり
+        </label>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary" onclick="addSchedule()" style="flex:1;">追加</button>
+          <button class="btn btn-outline" onclick="closeModal('modal-add-schedule')" style="flex:1;">キャンセル</button>
+        </div>
+      </div>
+
+      <!-- Excel取込 -->
+      <div id="add-tab-excel" style="display:none;">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.7;">
+          Excelファイル（.xlsx）を選択してください。<br>
+          <b>A列:</b>日付　<b>B列:</b>学年　<b>C列:</b>時間　<b>D列:</b>場所<br>
+          1行目はヘッダーとして読み飛ばします。
+        </div>
+        <input type="file" id="excel-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;">
+        <div id="excel-preview" style="margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary" id="excel-import-btn" onclick="importFromExcel()" style="flex:1;display:none;">取込実行</button>
+          <button class="btn btn-outline" onclick="closeModal('modal-add-schedule')" style="flex:1;">キャンセル</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーカイブモーダル -->
+  <div id="modal-archive" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:flex-end;">
+    <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-height:85vh;overflow-y:auto;">
+      <div style="font-weight:700;font-size:16px;color:var(--green);margin-bottom:6px;">📦 アーカイブ管理</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">チェックした日程をアーカイブ（非表示）します</div>
+      <div id="archive-list"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="btn btn-primary" onclick="doArchive()" style="flex:1;">アーカイブ実行</button>
+        <button class="btn btn-outline" onclick="closeModal('modal-archive')" style="flex:1;">閉じる</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 当番 ===== -->
+<div id="page-duty" class="page">
+  <div class="card">
+    <div class="card-title">当番割当</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">
+      条件：当日◯ かつ 翌日程も◯の方が候補。累計回数が少ない順にサジェスト。
+    </div>
+    <div id="duty-list"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">月別 当番回数</div>
+    <div id="duty-monthly"></div>
+  </div>
+</div>
+
+<!-- ===== まとめ ===== -->
+<div id="page-summary" class="page">
+  <div class="card">
+    <div class="card-title">年度を選択</div>
+    <div class="nendo-tabs" id="nendo-tabs"></div>
+  </div>
+  <div class="card" id="summary-record">
+    <div class="card-title">年度累積 成績</div>
+    <div class="empty-state">試合データがありません</div>
+  </div>
+  <div class="card" id="summary-scorers">
+    <div class="card-title">年度累積 得点ランキング</div>
+    <div class="empty-state">得点データがありません</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+
+// ===== 出欠確認 =====
+// 家族リスト（動的・localStorage永続）
+var _parentsCache = null;
+function getParents() {
+  if (_parentsCache) return _parentsCache;
+  var defaults = ['矢島', '原', '田崎', '粂', '小野寺', '石井', '福嶋', '遠山'];
+  _parentsCache = JSON.parse(localStorage.getItem('fc_parents') || JSON.stringify(defaults));
+  return _parentsCache;
+}
+function saveParents(arr) {
+  _parentsCache = arr;
+  localStorage.setItem('fc_parents', JSON.stringify(arr));
+}
+// 後方互換のためPARENTSを動的プロキシとして定義（配列アクセスはgetParents()を使用）
+function PARENTS_LIST() { return getParents(); }
+
+function addFamily() {
+  var name = document.getElementById('input-family').value.trim();
+  if (!name) { showToast('家族名を入力してください'); return; }
+  var arr = getParents();
+  if (arr.indexOf(name) >= 0) { showToast('すでに登録されています'); return; }
+  arr.push(name);
+  saveParents(arr);
+  document.getElementById('input-family').value = '';
+  renderFamilies();
+  showToast(name + ' を登録しました ✅');
+}
+
+function removeFamily(name) {
+  if (!confirm(name + ' を削除しますか？')) return;
+  var arr = getParents().filter(function(p){return p!==name;});
+  saveParents(arr);
+  renderFamilies();
+  showToast(name + ' を削除しました');
+}
+
+function renderFamilies() {
+  var el = document.getElementById('family-list');
+  if (!el) return;
+  var arr = getParents();
+  if (!arr.length) {
+    el.innerHTML = '<div class="empty-state">家族が登録されていません</div>';
+    document.getElementById('family-count').textContent = '';
+    return;
+  }
+  el.innerHTML = '<div class="player-chips">' +
+    arr.map(function(name) {
+      return '<div class="player-chip"><span>' + name + '</span>' +
+        '<button onclick="removeFamily(\'' + name + '\')">✕</button></div>';
+    }).join('') + '</div>';
+  document.getElementById('family-count').textContent = '計 ' + arr.length + ' 家族';
+}
+
+// ===== 自分の家族 =====
+function getMyFamily() {
+  return localStorage.getItem('fc_my_family') || '';
+}
+function setMyFamily(name) {
+  localStorage.setItem('fc_my_family', name);
+}
+
+function showFamilySelectModal() {
+  var arr = getParents();
+  var el = document.getElementById('family-select-list');
+  el.innerHTML = arr.map(function(name) {
+    return '<button onclick="selectMyFamily(\'' + name + '\')" style="' +
+      'padding:14px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;' +
+      'border:2px solid var(--card-border);background:white;color:var(--text);text-align:left;' +
+      'transition:all 0.1s;">' +
+      name + '</button>';
+  }).join('');
+  document.getElementById('modal-select-family').style.display = 'flex';
+}
+
+function selectMyFamily(name) {
+  setMyFamily(name);
+  document.getElementById('modal-select-family').style.display = 'none';
+  updateMyFamilyDisplay();
+  renderAttendancePage();
+  showToast('👤 ' + name + ' として設定しました');
+}
+
+function updateMyFamilyDisplay() {
+  var el = document.getElementById('my-family-display');
+  if (!el) return;
+  var name = getMyFamily();
+  el.textContent = name ? '👤 ' + name : '（未設定）';
+}
+
+function checkFirstVisit() {
+  if (!getMyFamily()) {
+    showFamilySelectModal();
+  }
+}
+
+// 会場リスト（localStorage永続）
+function getVenues() {
+  var defaults = ['高島平多目的','板七小','板二小','大谷口小','板五小'];
+  return JSON.parse(localStorage.getItem('fc_venues') || JSON.stringify(defaults));
+}
+function saveVenues(v) { localStorage.setItem('fc_venues', JSON.stringify(v)); }
+
+// 日程リスト（localStorage永続）
+function getSchedules() {
+  var defaults = [
+    {id:'2026-04-04_全学年',date:'2026-04-04',grade:'全学年',venue:'高島平多目的 8:50~11:00',note:'',carpool:false,archived:false},
+    {id:'2026-04-05_1・2年',date:'2026-04-05',grade:'1・2年',venue:'板七小 8:50~10:50',note:'',carpool:false,archived:false},
+    {id:'2026-04-12_1・2・3年',date:'2026-04-12',grade:'1・2・3年',venue:'板七小 8:50~10:50',note:'',carpool:false,archived:false},
+    {id:'2026-04-18_1・2年',date:'2026-04-18',grade:'1・2年',venue:'板七小 10:00~11:45',note:'',carpool:false,archived:false},
+    {id:'2026-04-25_1・2・3年',date:'2026-04-25',grade:'1・2・3年',venue:'高島平多目的 10:30~13:00',note:'',carpool:false,archived:false},
+    {id:'2026-04-26_2・3年',date:'2026-04-26',grade:'2・3年',venue:'大谷口小 17:50~19:15',note:'',carpool:false,archived:false},
+    {id:'2026-04-29_1・2年',date:'2026-04-29',grade:'1・2年',venue:'板二小 10:15~12:15',note:'',carpool:false,archived:false}
+  ];
+  return JSON.parse(localStorage.getItem('fc_schedules') || JSON.stringify(defaults));
+}
+function saveSchedules(s) { localStorage.setItem('fc_schedules', JSON.stringify(s)); }
+
+// 出欠データ（デフォルト未選択）
+function getAttendanceData() {
+  // 古いキーを削除して未選択状態を保証
+  localStorage.removeItem('fc_attendance');
+  return JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
+}
+function saveAttendanceData(d) {
+  localStorage.setItem('fc_attendance2', JSON.stringify(d));
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action:'saveAttendance', data:JSON.stringify(d)}).catch(function(){});
+  }
+}
+
+// 配車データ
+function getCarpoolData() {
+  return JSON.parse(localStorage.getItem('fc_carpool') || '{}');
+}
+function saveCarpoolData(d) { localStorage.setItem('fc_carpool', JSON.stringify(d)); }
+
+// 確定データ
+function getConfirmedData() {
+  return JSON.parse(localStorage.getItem('fc_confirmed') || '{}');
+}
+function saveConfirmedData(d) { localStorage.setItem('fc_confirmed', JSON.stringify(d)); }
+
+function confirmSchedule(sid) {
+  var confirmed = getConfirmedData();
+  var att = getAttendanceData()[sid] || {};
+  var cp = getCarpoolData()[sid] || {};
+  confirmed[sid] = { att: att, carpool: cp };
+  saveConfirmedData(confirmed);
+  renderAttendancePage();
+  showToast('確定しました！');
+}
+
+function setAttendance(sid, parent, val) {
+  var s = getSchedules().find(function(x){return x.id===sid;});
+  if (s && s.locked) { showToast('🔒 全体締め切り済みです'); return; }
+  if (isPersonalLocked(sid, parent)) { showToast('✅ 入力済みです（行のロックを解除してください）'); return; }
+  var d = getAttendanceData();
+  if (!d[sid]) d[sid] = {};
+  d[sid][parent] = (d[sid][parent] === val) ? '' : val;
+  saveAttendanceData(d);
+  renderAttendancePage();
+}
+
+// ===== 個人ロック =====
+function getPersonalLocks() {
+  return JSON.parse(localStorage.getItem('fc_personal_lock') || '{}');
+}
+function savePersonalLocks(d) { localStorage.setItem('fc_personal_lock', JSON.stringify(d)); }
+function isPersonalLocked(sid, parent) {
+  var locks = getPersonalLocks();
+  return !!(locks[sid] && locks[sid][parent]);
+}
+function togglePersonalLock(sid, parent) {
+  var s = getSchedules().find(function(x){return x.id===sid;});
+  if (s && s.locked) { showToast('🔒 全体締め切り済みです'); return; }
+  var locks = getPersonalLocks();
+  if (!locks[sid]) locks[sid] = {};
+  locks[sid][parent] = !locks[sid][parent];
+  savePersonalLocks(locks);
+  renderAttendancePage();
+  showToast(locks[sid][parent] ? '✅ ' + parent + ' の入力をロックしました' : '🔓 ' + parent + ' のロックを解除しました');
+}
+
+function toggleCarpool(sid) {
+  var scheds = getSchedules();
+  var s = scheds.find(function(x){return x.id===sid;});
+  if (s) { s.carpool = !s.carpool; saveSchedules(scheds); }
+  renderAttendancePage();
+}
+
+function setCarpoolDrive(sid, parent, val) {
+  if (isPersonalLocked(sid, parent)) { showToast('✅ 入力済みです'); return; }
+  var d = getCarpoolData();
+  if (!d[sid]) d[sid] = {};
+  if (!d[sid][parent]) d[sid][parent] = {};
+  d[sid][parent].drive = val;
+  saveCarpoolData(d);
+  renderAttendancePage();
+}
+function setCarpoolNum(sid, parent, field, val) {
+  if (isPersonalLocked(sid, parent)) return;
+  var d = getCarpoolData();
+  if (!d[sid]) d[sid] = {};
+  if (!d[sid][parent]) d[sid][parent] = {};
+  d[sid][parent][field] = val;
+  saveCarpoolData(d);
+}
+
+function deleteSchedule(sid) {
+  if (!confirm('この日程を削除しますか？')) return;
+  var scheds = getSchedules().filter(function(s){return s.id!==sid;});
+  saveSchedules(scheds);
+  renderAttendancePage();
+}
+
+function toggleLock(sid) {
+  var scheds = getSchedules();
+  var s = scheds.find(function(x){return x.id===sid;});
+  if (!s) return;
+  s.locked = !s.locked;
+  saveSchedules(scheds);
+  renderAttendancePage();
+  showToast(s.locked ? '🔒 入力を締め切りました' : '🔓 ロックを解除しました');
+}
+
+function lockAllSchedules() {
+  if (!confirm('全日程の出欠入力を締め切りますか？')) return;
+  var scheds = getSchedules();
+  scheds.forEach(function(s){ s.locked = true; });
+  saveSchedules(scheds);
+  closeModal('modal-settings');
+  renderAttendancePage();
+  showToast('🔒 全日程を締め切りました');
+}
+
+function unlockAllSchedules() {
+  if (!confirm('全日程のロックを解除しますか？')) return;
+  var scheds = getSchedules();
+  scheds.forEach(function(s){ s.locked = false; });
+  saveSchedules(scheds);
+  closeModal('modal-settings');
+  renderAttendancePage();
+  showToast('🔓 全日程のロックを解除しました');
+}
+
+function deleteAllSchedules() {
+  if (!confirm('出欠確認の全日程を削除しますか？\n出欠データもすべてリセットされます。\nこの操作は元に戻せません。')) return;
+  // 自動同期を一時停止
+  stopAutoSync();
+  // ローカル削除
+  localStorage.removeItem('fc_schedules');
+  localStorage.removeItem('fc_attendance2');
+  localStorage.removeItem('fc_carpool');
+  localStorage.removeItem('fc_confirmed');
+  localStorage.removeItem('fc_personal_lock');
+  localStorage.removeItem('fc_duty');
+  // クラウドも削除（clearAttendance → 空データで上書き）
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action: 'clearAttendance'})
+      .then(function(){ return gasReq({action: 'saveAttendance', data: '{}'}); })
+      .catch(function(){})
+      .finally(function(){
+        // 削除完了後に自動同期を再開
+        startAutoSync();
+      });
+  } else {
+    startAutoSync();
+  }
+  document.getElementById('modal-settings').style.display = 'none';
+  renderAttendancePage();
+  showToast('🗑 全日程を削除しました');
+}
+
+function showAddScheduleModal() {
+  var today = new Date().toISOString().split('T')[0];
+  document.getElementById('new-sched-date').value = today;
+  document.getElementById('new-sched-note').value = '';
+  document.getElementById('new-sched-carpool').checked = false;
+  document.getElementById('new-venue-input-area').style.display = 'none';
+  // 会場リストを更新
+  var sel = document.getElementById('new-sched-venue');
+  var venues = getVenues();
+  sel.innerHTML = '<option value="">選択または入力</option>' +
+    venues.map(function(v){return '<option value="'+v+'">'+v+'</option>';}).join('');
+  document.getElementById('modal-add-schedule').style.display = 'flex';
+}
+
+function showAddVenueInput() {
+  var area = document.getElementById('new-venue-input-area');
+  area.style.display = area.style.display === 'none' ? 'block' : 'none';
+}
+
+function addNewVenue() {
+  var txt = document.getElementById('new-venue-text').value.trim();
+  if (!txt) { showToast('場所を入力してください'); return; }
+  var venues = getVenues();
+  if (!venues.includes(txt)) { venues.push(txt); saveVenues(venues); }
+  var sel = document.getElementById('new-sched-venue');
+  var opt = document.createElement('option');
+  opt.value = txt; opt.text = txt; sel.add(opt);
+  sel.value = txt;
+  document.getElementById('new-venue-text').value = '';
+  document.getElementById('new-venue-input-area').style.display = 'none';
+  showToast('場所を登録しました');
+}
+
+function addSchedule() {
+  var date = document.getElementById('new-sched-date').value;
+  var grade = document.getElementById('new-sched-grade').value;
+  var venue = document.getElementById('new-sched-venue').value;
+  var note = document.getElementById('new-sched-note').value.trim();
+  var carpool = document.getElementById('new-sched-carpool').checked;
+  if (!date) { showToast('日付を入力してください'); return; }
+  if (!venue) { showToast('場所を選択してください'); return; }
+  var id = date + '_' + grade;
+  var scheds = getSchedules();
+  scheds.push({id:id, date:date, grade:grade, venue:venue, note:note, carpool:carpool, archived:false});
+  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
+  saveSchedules(scheds);
+  closeModal('modal-add-schedule');
+  renderAttendancePage();
+  showToast('日程を追加しました');
+}
+
+function showArchiveModal() {
+  var scheds = getSchedules().filter(function(s){return !s.archived;});
+  var el = document.getElementById('archive-list');
+  if (!scheds.length) { el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:16px;">日程がありません</div>'; }
+  else {
+    el.innerHTML = scheds.map(function(s) {
+      var d = new Date(s.date);
+      var wd = ['日','月','火','水','木','金','土'][d.getDay()];
+      var lbl = s.date.replace(/^2026-/,'').replace('-','/') + '('+wd+') ' + s.grade;
+      return '<label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--card-border);font-size:14px;">' +
+        '<input type="checkbox" class="archive-check" value="'+s.id+'" style="width:auto;margin:0;">' +
+        lbl + '<span style="font-size:11px;color:var(--text-muted);">'+s.venue+'</span>' +
+        '</label>';
+    }).join('');
+  }
+  document.getElementById('modal-archive').style.display = 'flex';
+}
+
+function doArchive() {
+  var checks = document.querySelectorAll('.archive-check:checked');
+  if (!checks.length) { showToast('日程を選択してください'); return; }
+  var ids = Array.from(checks).map(function(c){return c.value;});
+  var scheds = getSchedules();
+  scheds.forEach(function(s){ if(ids.includes(s.id)) s.archived = true; });
+  saveSchedules(scheds);
+  closeModal('modal-archive');
+  renderAttendancePage();
+  showToast(ids.length + '件をアーカイブしました');
+}
+
+function switchAddTab(tab) {
+  document.getElementById('add-tab-manual').style.display = tab==='manual' ? '' : 'none';
+  document.getElementById('add-tab-excel').style.display  = tab==='excel'  ? '' : 'none';
+  document.getElementById('tab-manual').style.color = tab==='manual' ? 'var(--green)' : 'var(--text-muted)';
+  document.getElementById('tab-manual').style.borderBottomColor = tab==='manual' ? 'var(--green)' : 'transparent';
+  document.getElementById('tab-excel').style.color = tab==='excel' ? 'var(--green)' : 'var(--text-muted)';
+  document.getElementById('tab-excel').style.borderBottomColor = tab==='excel' ? 'var(--green)' : 'transparent';
+  if (tab==='excel') {
+    document.getElementById('excel-preview').innerHTML = '';
+    document.getElementById('excel-import-btn').style.display = 'none';
+    document.getElementById('excel-file-input').value = '';
+  }
+}
+
+// Excelファイル読み込み→プレビュー
+var excelRows = [];
+document.addEventListener('change', function(e) {
+  if (e.target.id !== 'excel-file-input') return;
+  var file = e.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      var wb = XLSX.read(ev.target.result, {type:'array', cellDates:true});
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var json = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      excelRows = [];
+      var preview = '';
+      var added = 0, skipped = 0;
+      // 1行目ヘッダーを読み飛ばし
+      for (var i=1; i<json.length; i++) {
+        var row = json[i];
+        // 空行スキップ
+        if (!row[0] && !row[1]) continue;
+        // A列：日付パース
+        var rawDate = row[0];
+        var dateStr = '';
+        if (rawDate instanceof Date) {
+          dateStr = rawDate.toISOString().split('T')[0];
+        } else if (typeof rawDate === 'number') {
+          // Excelシリアル値
+          var d = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
+          dateStr = d.toISOString().split('T')[0];
+        } else if (typeof rawDate === 'string') {
+          // 「4/5」「2026/4/5」「4月5日」などのパース
+          var m;
+          if ((m = rawDate.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/))) {
+            dateStr = m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+          } else if ((m = rawDate.match(/(\d{1,2})[\/\-](\d{1,2})/))) {
+            dateStr = '2026-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');
+          } else if ((m = rawDate.match(/(\d{1,2})月(\d{1,2})日/))) {
+            dateStr = '2026-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');
+          }
+        }
+        if (!dateStr) { skipped++; continue; }
+        var grade  = String(row[1] || '').trim() || '全学年';
+        var time   = String(row[2] || '').trim();
+        var place  = String(row[3] || '').trim();
+        var venue  = place + (time ? ' ' + time : '');
+        excelRows.push({date:dateStr, grade:grade, venue:venue});
+        var wd = ['日','月','火','水','木','金','土'][new Date(dateStr).getDay()];
+        var dl = dateStr.replace(/^2026-/,'').replace(/-/,'/') + '('+wd+')';
+        preview += '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #f0f0f0;">'+
+          '<span style="color:var(--green);font-weight:700;">'+dl+'</span> '+
+          grade+' '+venue+'</div>';
+        added++;
+      }
+      var prevEl = document.getElementById('excel-preview');
+      if (excelRows.length > 0) {
+        prevEl.innerHTML =
+          '<div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px;">'+added+'件を読み込みました'+(skipped?'（'+skipped+'行スキップ）':'')+' ↓確認して取込実行</div>' +
+          '<div style="max-height:200px;overflow-y:auto;border:1px solid var(--card-border);border-radius:8px;padding:6px 10px;">'+preview+'</div>';
+        document.getElementById('excel-import-btn').style.display = '';
+      } else {
+        prevEl.innerHTML = '<div style="color:#c0392b;font-size:12px;">読み込めるデータがありませんでした。列の順番（A:日付 B:学年 C:時間 D:場所）を確認してください。</div>';
+      }
+    } catch(err) {
+      document.getElementById('excel-preview').innerHTML = '<div style="color:#c0392b;font-size:12px;">読み込みエラー: '+err.message+'</div>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+function importFromExcel() {
+  if (!excelRows.length) { showToast('データがありません'); return; }
+  var scheds = getSchedules();
+  var added = 0;
+  excelRows.forEach(function(r) {
+    var id = r.date + '_' + r.grade;
+    // 重複チェック
+    if (scheds.find(function(s){return s.id===id;})) {
+      // 連番でユニーク化
+      var n = 2;
+      while (scheds.find(function(s){return s.id===id+'_'+n;})) n++;
+      id = id + '_' + n;
+    }
+    scheds.push({id:id, date:r.date, grade:r.grade, venue:r.venue, note:'', carpool:false, archived:false, locked:false});
+    added++;
+  });
+  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
+  saveSchedules(scheds);
+  closeModal('modal-add-schedule');
+  renderAttendancePage();
+  showToast('✅ '+added+'件の日程を取込みました！');
+  excelRows = [];
+}
+
+function openSettings() {
+  document.getElementById('modal-settings').style.display = 'flex';
+  updateMyFamilyDisplay();
+  renderPlayers();
+  renderFamilies();
+}
+
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+// ===== 自動同期（出欠確認タブ専用） =====
+var _autoSyncTimer = null;
+var _lastSyncLabel = null;
+
+function startAutoSync() {
+  stopAutoSync();
+  _autoSyncTimer = setInterval(function() {
+    if (typeof gasUrl === 'undefined' || !gasUrl) return;
+    gasReq({action:'getAttendance'}).then(function(cloudData) {
+      if (!cloudData || typeof cloudData !== 'object' || cloudData.error) return;
+      if (!Object.keys(cloudData).length) return;
+      // ローカルとクラウドをマージ（入力済み家族はローカル優先）
+      var local = JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
+      var merged = JSON.parse(JSON.stringify(cloudData));
+      Object.keys(local).forEach(function(sid) {
+        if (!merged[sid]) merged[sid] = {};
+        Object.keys(local[sid]).forEach(function(parent) {
+          if (local[sid][parent]) merged[sid][parent] = local[sid][parent];
+        });
+      });
+      localStorage.setItem('fc_attendance2', JSON.stringify(merged));
+      var now = new Date();
+      var label = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+      var indEl = document.getElementById('sync-indicator');
+      if (indEl) indEl.textContent = '🔄 ' + label + ' 同期済';
+      renderAttendancePage();
+    }).catch(function(){});
+  }, 5000);
+}
+
+function stopAutoSync() {
+  if (_autoSyncTimer) { clearInterval(_autoSyncTimer); _autoSyncTimer = null; }
+}
+
+async function loadAttendanceFromCloud() {
+  if (typeof gasUrl === 'undefined' || !gasUrl) return;
+  try {
+    var data = await gasReq({action:'getAttendance'});
+    if (data && typeof data === 'object' && !data.error && Object.keys(data).length > 0) {
+      localStorage.setItem('fc_attendance2', JSON.stringify(data));
+    }
+  } catch(e) {}
+}
+
+function renderAttendancePage() {
+  loadAttendanceFromCloud();
+  var myFamily = getMyFamily();
+  // 自分の家族バッジを更新
+  var badge = document.getElementById('att-my-family-badge');
+  if (badge) {
+    if (myFamily) {
+      badge.innerHTML = '👤 <span style="cursor:pointer;text-decoration:underline;" onclick="showFamilySelectModal()">'+myFamily+'</span> として入力中';
+    } else {
+      badge.innerHTML = '<span style="cursor:pointer;color:#e6a817;" onclick="showFamilySelectModal()">⚠ 家族を選択してください</span>';
+    }
+  }
+  var el = document.getElementById('attendance-list');
+  if (!el) return;
+  var scheds = getSchedules().filter(function(s){return !s.archived;});
+  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
+  var attData  = getAttendanceData();
+  var cpData   = getCarpoolData();
+  var weekdays = ['日','月','火','水','木','金','土'];
+  var parents  = getParents();
+
+  if (!scheds.length) {
+    el.innerHTML = '<div class="empty-state">「＋ 日程追加」ボタンで日程を追加してください</div>';
+    return;
+  }
+
+  var html = '';
+  scheds.forEach(function(s) {
+    var att  = attData[s.id] || {};
+    var cp   = cpData[s.id]  || {};
+    var locked = s.locked || false;
+    var dateObj = new Date(s.date);
+    var wd = weekdays[dateObj.getDay()];
+    var dateLabel = s.date.replace(/^2026-/,'').replace(/-/,'/') + '(' + wd + ')';
+    var maru = parents.filter(function(p){return att[p]==='◯';}).length;
+
+    var dutyData = getDutyData();
+    var assigned = dutyData[s.id] || '';
+    var lockBadge = locked ? '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:#fdecea;color:#c0392b;">🔒 締切済</span>' : '';
+
+    var btnSt = 'border:none;border-radius:6px;font-size:12px;font-weight:700;padding:4px 7px;min-width:30px;transition:background 0.1s;';
+    var selSt = 'font-size:12px;padding:4px 5px;border:1.5px solid #ddd;border-radius:6px;background:#fff;margin:0;max-width:72px;';
+
+    // カラムヘッダー
+    var headerRow =
+      '<div style="display:flex;align-items:center;gap:6px;padding:4px 0 6px;border-bottom:2px solid var(--card-border);">' +
+        '<div style="min-width:48px;flex-shrink:0;"></div>' +
+        '<div style="flex-shrink:0;font-size:10px;font-weight:700;color:var(--text-muted);min-width:98px;text-align:center;">出欠確認</div>' +
+        (s.carpool ? '<div style="flex-shrink:0;font-size:10px;font-weight:700;color:var(--text-muted);">配車可否</div>' : '') +
+      '</div>';
+
+    var rows = '';
+    parents.forEach(function(p) {
+      var v   = att[p] || '';
+      var cpP = cp[p]  || {};
+      var drv = cpP.drive || '';
+      var pl  = cpP.players || '';
+      var cm  = cpP.companions || '';
+
+      // 自分の家族かどうか
+      var isMyRow = !myFamily || p === myFamily;
+      var pLocked = locked || isPersonalLocked(s.id, p) || !isMyRow;
+
+      function bb(val, label) {
+        var on = v === val;
+        var bg = on ? (val==='◯'?'#2d7a4f':val==='△'?'#e6a817':'#c0392b') : '#eee';
+        var co = on ? 'white' : '#bbb';
+        var extra = pLocked ? 'opacity:0.7;pointer-events:none;' : 'cursor:pointer;';
+        return '<button class="att-btn" data-sid="'+s.id+'" data-parent="'+p+'" data-val="'+val+'" style="'+btnSt+'background:'+bg+';color:'+co+';'+extra+'">'+label+'</button>';
+      }
+
+      // 配車プルダウン
+      var drvSel = s.carpool
+        ? '<select class="cp-drive-sel" data-sid="'+s.id+'" data-parent="'+p+'" style="'+selSt+'"'+(pLocked?' disabled':'')+'>'+
+            '<option value="">-</option>'+
+            '<option value="ok"'+(drv==='ok'?' selected':'')+'>🚗可</option>'+
+            '<option value="ng"'+(drv==='ng'?' selected':'')+'>🚗不可</option>'+
+          '</select>'
+        : '';
+
+      function numSel(field, curVal) {
+        var opts = '<option value="">-</option>';
+        for (var i=1;i<=4;i++) opts += '<option value="'+i+'"'+(String(curVal)===String(i)?' selected':'')+'>'+i+'</option>';
+        return '<select class="cp-num" data-sid="'+s.id+'" data-parent="'+p+'" data-field="'+field+'" style="'+selSt+';max-width:52px;"'+(pLocked?' disabled':'')+'>'+opts+'</select>';
+      }
+      var carpoolInputs = (s.carpool && drv==='ng')
+        ? '<span style="font-size:10px;color:#888;white-space:nowrap;">配車希望選手人数</span>'+numSel('players',pl)+
+          '<span style="font-size:10px;color:#888;margin-left:4px;white-space:nowrap;">同伴希望者人数</span>'+numSel('companions',cm)
+        : '';
+
+      // 入力済ボタン（自分の行のみ）
+      var pLockBtn = (!locked && isMyRow)
+        ? '<button class="personal-lock-btn" data-sid="'+s.id+'" data-parent="'+p+'" style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;border:none;cursor:pointer;white-space:nowrap;'+(isPersonalLocked(s.id,p)?'background:#e8f5ee;color:#2d7a4f;':'background:#f5f5f5;color:#aaa;')+'">'+(isPersonalLocked(s.id,p)?'✅ 済':'入力済にする')+'</button>'
+        : '';
+
+      var rowBg = !isMyRow ? 'background:#f8f8f8;opacity:0.75;' : (isPersonalLocked(s.id,p)&&!locked ? 'background:#fafffe;' : '');
+
+      rows +=
+        '<div style="padding:7px 0;border-bottom:1px solid #f2f2f2;'+rowBg+'">' +
+          '<div style="display:flex;align-items:center;gap:6px;">' +
+            '<div style="min-width:48px;font-size:13px;font-weight:600;flex-shrink:0;'+(isMyRow?'color:var(--green);':'color:#bbb;')+'">' + p + '</div>' +
+            '<div style="display:flex;gap:4px;flex-shrink:0;">' + bb('◯','◯') + bb('△','△') + bb('×','×') + '</div>' +
+            (s.carpool ? '<div style="flex-shrink:0;">' + drvSel + '</div>' : '') +
+            '<div style="flex:1;"></div>' +
+            '<div style="flex-shrink:0;">' + pLockBtn + '</div>' +
+          '</div>' +
+          (s.carpool && carpoolInputs
+            ? '<div style="display:flex;align-items:center;gap:4px;margin-top:5px;padding-left:54px;">' + carpoolInputs + '</div>'
+            : '') +
+        '</div>';
+    });
+
+    html +=
+      '<div class="card" style="'+(locked?'opacity:0.85;border:1.5px solid #f5c0bb;':'')+'">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">' +
+          '<div>' +
+            '<div style="display:flex;align-items:center;gap:6px;">' +
+              '<div style="font-size:17px;font-weight:700;color:var(--green);">' + dateLabel + '</div>' +
+              lockBadge +
+              (assigned ? '<span style="background:#2d7a4f;color:white;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">当番: '+assigned+'</span>' : '') +
+            '</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);">' + s.grade + '　' + s.venue + '</div>' +
+            (s.note ? '<div style="font-size:11px;color:var(--red);">' + s.note + '</div>' : '') +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:6px;">' +
+            '<div style="font-size:13px;font-weight:700;color:var(--green);white-space:nowrap;">◯ ' + maru + '名</div>' +
+            (!locked ? '<button class="carpool-toggle-btn" data-sid="'+s.id+'" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;border:none;cursor:pointer;'+(s.carpool?'background:#fff3cd;color:#b7950b;':'background:#f0f0f0;color:#aaa;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</button>' : '') +
+            '<button class="del-sched-btn" data-sid="'+s.id+'" style="background:none;border:none;color:#ccc;font-size:16px;cursor:pointer;padding:0;">🗑</button>' +
+          '</div>' +
+        '</div>' +
+        '<div>' + headerRow + rows + '</div>' +
+      '</div>';
+  });
+
+  el.innerHTML = html;
+}
+
+
+// ===== 状態 =====
+
+// ===== 状態 =====
+let players = [], matches = [], matchCounter = 0;
+let gasUrl = localStorage.getItem('fc_gas_url') || 'https://script.google.com/macros/s/AKfycbwKOeBxmLG5agYpHwZFsItT_iCwMuAoW_S8SDm5N1-sLDRPskZ4naxbqQXhu-oxwyOlRA/exec';
+let reportMeta = JSON.parse(localStorage.getItem('fc_report_meta') || '{"date":"","author":"","grade":"2年生"}');
+let summaryData = [];
+let selectedNendo = null;
+let deferredPrompt = null;
+
+// ===== 年度計算 =====
+function getNendo(date) {
+  const d = date ? new Date(date) : new Date();
+  return d.getMonth() < 3 ? d.getFullYear() - 1 : d.getFullYear();
+}
+selectedNendo = getNendo();
+
+// ===== PWA =====
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'flex';
+});
+function installApp() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(()=>{ deferredPrompt=null; document.getElementById('install-banner').style.display='none'; });
+}
+
+// ===== 初期化 =====
+window.onload = async () => {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('report-date').value = reportMeta.date || today;
+  // 選手は常にローカルから先に読み込む（永続保存）
+  players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
+  renderPlayers();
+  if (gasUrl) {
+    document.getElementById('gas-url').value = gasUrl || 'https://script.google.com/macros/s/AKfycbwKOeBxmLG5agYpHwZFsItT_iCwMuAoW_S8SDm5N1-sLDRPskZ4naxbqQXhu-oxwyOlRA/exec';
+    await syncAll();
+  } else {
+    matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
+    matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
+    renderAllMatches();
+  }
+  // 初回訪問チェック（少し遅らせてUIが整ってから）
+  setTimeout(checkFirstVisit, 500);
+};
+
+// ===== ユーティリティ =====
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-bar button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (name === 'summary') loadSummary();
+  if (name === 'result') renderResultPage();
+  if (name === 'attendance') { renderAttendancePage(); startAutoSync(); }
+  else { stopAutoSync(); }
+  if (name === 'duty') renderDutyPage();
+}
+function saveReportMeta() {
+  const prevDate = reportMeta.date;
+  reportMeta.date = document.getElementById('report-date').value;
+  localStorage.setItem('fc_report_meta', JSON.stringify(reportMeta));
+  if (prevDate && prevDate !== reportMeta.date) {
+    if (confirm('日付が変わりました。試合データをリセットしますか？')) {
+      matches = [];
+      matchCounter = 0;
+      saveMatches();
+      renderAllMatches();
+      showToast('試合データをリセットしました');
+    }
+  }
+}
+
+// ===== GAS =====
+function saveGasUrl() {
+  gasUrl = document.getElementById('gas-url').value.trim();
+  localStorage.setItem('fc_gas_url', gasUrl);
+}
+async function gasReq(params) {
+  if (!gasUrl) throw new Error('URL未設定');
+  const url = gasUrl + '?' + new URLSearchParams(params);
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+async function testConnection() {
+  if (!gasUrl) { showToast('URLを入力してください'); return; }
+  showToast('接続テスト中...');
+  try {
+    await gasReq({ action: 'getPlayers' });
+    setConnected(true);
+    showToast('✅ 接続成功！');
+    await syncAll();
+  } catch(e) {
+    setConnected(false);
+    showToast('❌ 失敗: ' + e.message);
+  }
+}
+function setConnected(ok) {
+  const b = document.getElementById('conn-badge');
+  b.className = ok ? 'conn-ok' : 'conn-ng';
+  b.textContent = ok ? '● 接続済み' : '● 未接続';
+  document.getElementById('sync-status').textContent = ok ? '接続済み ✓' : '未接続';
+}
+async function syncAll() {
+  if (!gasUrl) return;
+  document.getElementById('sync-status').textContent = '同期中...';
+  try {
+    const [p, m] = await Promise.all([gasReq({action:'getPlayers'}), gasReq({action:'getMatches'})]);
+    const gasPlayers = Array.isArray(p) ? p : [];
+    if (gasPlayers.length > 0) {
+      players = gasPlayers;
+    } else {
+      players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
+    }
+    matches = Array.isArray(m) ? m : [];
+    matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
+    localStorage.setItem('fc_players_permanent', JSON.stringify(players));
+    localStorage.setItem('fc_players', JSON.stringify(players));
+    localStorage.setItem('fc_matches', JSON.stringify(matches));
+    setConnected(true);
+    renderPlayers(); renderAllMatches();
+  } catch(e) {
+    document.getElementById('sync-status').textContent = '同期失敗';
+    players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
+    matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
+    matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
+    renderPlayers(); renderAllMatches();
+  }
+}
+async function savePlayers() {
+  // 選手は永続キーに保存（試合リセットの影響を受けない）
+  localStorage.setItem('fc_players_permanent', JSON.stringify(players));
+  localStorage.setItem('fc_players', JSON.stringify(players));
+  if (!gasUrl) return;
+  try { await gasReq({action:'savePlayers', data:JSON.stringify(players)}); } catch(e){}
+}
+async function saveMatches() {
+  // 入力中はローカルのみ保存（クラウドは「まとめに追加」時のみ）
+  localStorage.setItem('fc_matches', JSON.stringify(matches));
+}
+async function saveMatchesToCloud() {
+  localStorage.setItem('fc_matches', JSON.stringify(matches));
+  if (!gasUrl) return;
+  try {
+    await gasReq({action:'saveMatches', data:JSON.stringify(matches)});
+    document.getElementById('sync-status').textContent = '保存済み ✓';
+  } catch(e) { showToast('⚠️ クラウド保存失敗（ローカルに保存）'); }
+}
+
+// ===== まとめにデータ追加 =====
+async function submitToSummary() {
+  if (!matches.length) { showToast('試合データがありません'); return; }
+  if (!gasUrl) { showToast('GASが未接続です'); return; }
+  let win=0, lose=0, draw=0, gf=0, ga=0;
+  const scorers = {};
+  matches.forEach(m => {
+    const k = totalK(m), o = totalO(m);
+    gf += k; ga += o;
+    if (k > o) win++;
+    else if (k < o) lose++;
+    else if (m.scores.pk_k + m.scores.pk_o > 0) { if (m.scores.pk_k > m.scores.pk_o) win++; else lose++; }
+    else draw++;
+    m.scorers.forEach(s => {
+      const p = players.find(p => p.id == s.playerId);
+      if (p) scorers[p.name] = (scorers[p.name]||0) + 1;
+    });
+  });
+  const date = document.getElementById('report-date').value;
+  const grade = reportMeta.grade || 'FC熊野';
+  const nendo = getNendo(date);
+  try {
+    await gasReq({ action:'addMatchRecord', data: JSON.stringify({nendo, date, grade, win, lose, draw, gf, ga, scorers}) });
+    showToast('✅ まとめに追加しました！');
+  } catch(e) { showToast('❌ 失敗: ' + e.message); }
+}
+
+// ===== まとめ読み込み =====
+async function loadSummary() {
+  if (!gasUrl) {
+    renderSummaryUI([]);
+    return;
+  }
+  try {
+    summaryData = await gasReq({action:'getSummary'});
+    if (!Array.isArray(summaryData)) summaryData = [];
+  } catch(e) { summaryData = []; }
+  renderSummaryUI(summaryData);
+}
+
+function renderSummaryUI(data) {
+  // 年度一覧
+  const nendos = [...new Set(data.map(d=>d.nendo))].sort((a,b)=>b-a);
+  if (!nendos.includes(selectedNendo)) selectedNendo = nendos[0] || getNendo();
+  const tabsEl = document.getElementById('nendo-tabs');
+  if (!nendos.length) {
+    tabsEl.innerHTML = `<span class="nendo-tab active">${getNendo()}年度</span>`;
+  } else {
+    tabsEl.innerHTML = nendos.map(n =>
+      `<button class="nendo-tab ${n==selectedNendo?'active':''}" onclick="selectNendo(${n},this)">${n}年度</button>`
+    ).join('');
+  }
+  const rows = data.filter(d => d.nendo == selectedNendo);
+  let win=0,lose=0,draw=0,gf=0,ga=0; const sm={};
+  rows.forEach(r => {
+    win+=parseInt(r.win)||0; lose+=parseInt(r.lose)||0; draw+=parseInt(r.draw)||0;
+    gf+=parseInt(r.gf)||0; ga+=parseInt(r.ga)||0;
+    Object.entries(r.scorers||{}).forEach(([n,c])=>{ sm[n]=(sm[n]||0)+parseInt(c); });
+  });
+  const rec = document.getElementById('summary-record');
+  if (!rows.length) {
+    rec.innerHTML='<div class="card-title">年度累積 成績</div><div class="empty-state">この年度のデータがありません</div>';
+  } else {
+    rec.innerHTML=`<div class="card-title">年度累積 成績（${selectedNendo}年度）</div>
+      <div style="text-align:center;padding:12px 0 16px;">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-size:40px;font-weight:900;">
+          <span class="wc">${win}勝</span><span style="color:#444;font-size:26px;margin:0 5px;">-</span>
+          <span class="lc">${lose}敗</span><span style="color:#444;font-size:26px;margin:0 5px;">-</span>
+          <span class="dc">${draw}分</span>
+        </span>
+      </div>
+      <div class="summary-row"><span class="lbl">記録数</span><span class="val">${rows.length}回</span></div>
+      <div class="summary-row"><span class="lbl">総試合数</span><span class="val">${win+lose+draw}試合</span></div>
+      <div class="summary-row"><span class="lbl">総得点</span><span class="val wc">${gf}点</span></div>
+      <div class="summary-row"><span class="lbl">総失点</span><span class="val lc">${ga}点</span></div>
+      <div class="summary-row"><span class="lbl">得失点差</span><span class="val">${gf-ga>=0?'+':''}${gf-ga}</span></div>`;
+  }
+  const sc = document.getElementById('summary-scorers');
+  const sorted = Object.entries(sm).sort((a,b)=>b[1]-a[1]);
+  const mx = sorted[0]?.[1]||1;
+  if (!sorted.length) {
+    sc.innerHTML='<div class="card-title">年度累積 得点ランキング</div><div class="empty-state">得点データがありません</div>';
+  } else {
+    sc.innerHTML=`<div class="card-title">年度累積 得点ランキング（${selectedNendo}年度）</div>
+      <div style="margin-top:6px;">${sorted.map(([n,c],i)=>`
+        <div class="sbar-row">
+          <span class="sname">${i===0?'🥇':i===1?'🥈':i===2?'🥉':'　'} ${n}</span>
+          <div class="sbar"><div class="sbar-fill" style="width:${(c/mx)*100}%"></div></div>
+          <span class="scnt">${c}</span>
+        </div>`).join('')}</div>`;
+  }
+}
+function selectNendo(n, btn) {
+  selectedNendo = n;
+  document.querySelectorAll('.nendo-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSummaryUI(summaryData);
+}
+
+// ===== 選手 =====
+async function addPlayer() {
+  const name = document.getElementById('input-name').value.trim();
+  if (!name) { showToast('選手名を入力してください'); return; }
+  players.push({id: Date.now(), name});
+  await savePlayers();
+  document.getElementById('input-name').value = '';
+  renderPlayers();
+  showToast(name + ' を登録しました ✅');
+}
+async function removePlayer(id) {
+  players = players.filter(p=>p.id!==id);
+  await savePlayers(); renderPlayers(); renderAllMatches();
+}
+function renderPlayers() {
+  const el = document.getElementById('player-list');
+  if (!players.length) { el.innerHTML='<div class="empty-state">まだ選手が登録されていません</div>'; document.getElementById('player-count').textContent=''; return; }
+  el.innerHTML = '<div class="player-grid">' +
+    players.map(p=>`<div class="player-chip"><span>${p.name}</span><button onclick="removePlayer(${p.id})">✕</button></div>`).join('') + '</div>';
+  document.getElementById('player-count').textContent = `計 ${players.length} 名`;
+}
+
+// ===== 試合 =====
+function totalK(m) { return m.scores.h1_k + m.scores.h2_k; }
+function totalO(m) { return m.scores.h1_o + m.scores.h2_o; }
+
+async function addMatch() {
+  matchCounter++;
+  matches.push({
+    id: Date.now(), num: matchCounter, opponent: '', venue: '',
+    scores: { h1_k:0, h2_k:0, h1_o:0, h2_o:0, pk_k:0, pk_o:0 },
+    scorers: []
+  });
+  await saveMatchesToCloud(); renderAllMatches();
+  // スクロール
+  setTimeout(()=>{ const last=document.querySelector('.match-card:last-child'); if(last) last.scrollIntoView({behavior:'smooth', block:'start'}); }, 100);
+}
+async function removeMatch(id) {
+  matches = matches.filter(m=>m.id!==id);
+  // 削除後に連番を振り直す
+  matches.forEach(function(m, i){ m.num = i + 1; });
+  matchCounter = matches.length;
+  await saveMatchesToCloud(); renderAllMatches();
+}
+async function updateField(id, field, value) {
+  const m = matches.find(m=>m.id===id); if (!m) return;
+  if (field.startsWith('scores.')) m.scores[field.replace('scores.','')] = Math.max(0, parseInt(value)||0);
+  else m[field] = value;
+  await saveMatches();
+  refreshMatchUI(id, m);
+}
+
+// スコアステッパー
+async function stepScore(matchId, field, delta) {
+  const m = matches.find(m=>m.id===matchId); if(!m) return;
+  m.scores[field] = Math.max(0, (m.scores[field]||0) + delta);
+  // 得点者カウント連動（熊野の得点のみ）
+  await saveMatches();
+  refreshMatchUI(matchId, m);
+  // スコア数字アニメ
+  const el = document.getElementById(`sv-${matchId}-${field}`);
+  if (el) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+}
+
+// 失点ボタン（+1 / -1）
+async function stepConcede(matchId, half, delta) {
+  const m = matches.find(m=>m.id===matchId); if(!m) return;
+  const key = half === 'h1' ? 'h1_o' : 'h2_o';
+  m.scores[key] = Math.max(0, (m.scores[key]||0) + delta);
+  await saveMatches();
+  refreshMatchUI(matchId, m);
+  if (delta > 0) {
+    const btn = document.getElementById(`concede-btn-${matchId}-${half}`);
+    if (btn) { btn.classList.remove('pulse'); void btn.offsetWidth; btn.classList.add('pulse'); }
+  }
+}
+
+function refreshMatchUI(id, m) {
+  // 合計スコア表示更新
+  const k = totalK(m), o = totalO(m);
+  const tkEl = document.getElementById(`tk-${id}`); if(tkEl) tkEl.textContent = k;
+  const toEl = document.getElementById(`to-${id}`); if(toEl) toEl.textContent = o;
+  // 相手チーム名の連動更新
+  const oppName = m.opponent || '相手';
+  const onEl = document.getElementById(`opp-name-${id}`); if(onEl) onEl.textContent = oppName;
+  const opkEl = document.getElementById(`opp-pk-${id}`); if(opkEl) opkEl.textContent = oppName;
+  // 各ステッパー数値
+  ['h1_k','h2_k','pk_k','h1_o','h2_o','pk_o'].forEach(f=>{
+    const el=document.getElementById(`sv-${id}-${f}`); if(el) el.textContent=m.scores[f]||0;
+  });
+  // 失点カウント表示
+  const c1=document.getElementById(`cc-${id}-h1`); if(c1) c1.textContent=m.scores.h1_o||0;
+  const c2=document.getElementById(`cc-${id}-h2`); if(c2) c2.textContent=m.scores.h2_o||0;
+  // 結果バッジ
+  const rb=document.getElementById(`res-${id}`); if(rb) rb.outerHTML=resBadge(id,m);
+}
+
+function resBadge(id, m) {
+  const k=totalK(m), o=totalO(m);
+  let cls='r-draw', txt='引き分け';
+  if(k>o){cls='r-win';txt='勝利 🏆';}
+  else if(k<o){cls='r-lose';txt='敗北';}
+  else if(m.scores.pk_k+m.scores.pk_o>0){
+    if(m.scores.pk_k>m.scores.pk_o){cls='r-win';txt='PK勝ち 🏆';}else{cls='r-lose';txt='PK負け';}
+  }
+  return `<div id="res-${id}"><span class="result-badge ${cls}">${txt}</span></div>`;
+}
+
+// 得点者追加 → スコア自動+1
+async function addScorer(mid, period) {
+  const m = matches.find(m=>m.id===mid);
+  if (!m) return;
+  if (!players.length) { showToast('先に選手を登録してください'); return; }
+  m.scorers.push({id: Date.now(), period, playerId: players[0]?.id||null});
+  // 得点カウント自動加算
+  if (period === 'h1') m.scores.h1_k = (m.scores.h1_k||0) + 1;
+  else if (period === 'h2') m.scores.h2_k = (m.scores.h2_k||0) + 1;
+  else if (period === 'pk') m.scores.pk_k = (m.scores.pk_k||0) + 1;
+  await saveMatches();
+  refreshMatchUI(mid, m);
+  renderScorerList(mid);
+}
+async function updateScorer(mid, sid, pid) {
+  const m = matches.find(m=>m.id===mid); if(!m) return;
+  const s = m.scorers.find(s=>s.id===sid); if(s) s.playerId=parseInt(pid);
+  await saveMatches();
+}
+async function removeScorer(mid, sid) {
+  const m = matches.find(m=>m.id===mid); if(!m) return;
+  const s = m.scorers.find(s=>s.id===sid);
+  if (s) {
+    // 得点カウント自動減算
+    if (s.period==='h1') m.scores.h1_k = Math.max(0,(m.scores.h1_k||0)-1);
+    else if (s.period==='h2') m.scores.h2_k = Math.max(0,(m.scores.h2_k||0)-1);
+    else if (s.period==='pk') m.scores.pk_k = Math.max(0,(m.scores.pk_k||0)-1);
+  }
+  m.scorers = m.scorers.filter(s=>s.id!==sid);
+  await saveMatches();
+  refreshMatchUI(mid, m);
+  renderScorerList(mid);
+}
+function renderScorerList(mid) {
+  const el = document.getElementById('sc-'+mid); if(!el) return;
+  const m = matches.find(m=>m.id===mid); if(!m) return;
+  if (!m.scorers.length) { el.innerHTML='<div style="font-size:12px;color:var(--text-muted);padding:3px 0;">得点者なし</div>'; return; }
+  const pl={h1:'前半',h2:'後半',pk:'PK'};
+  el.innerHTML = m.scorers.map(s=>`
+    <div class="scorer-row">
+      <span class="pbadge">${pl[s.period]}</span>
+      <select onchange="updateScorer(${mid},${s.id},this.value)">
+        ${players.map(p=>`<option value="${p.id}" ${p.id==s.playerId?'selected':''}>${p.name}</option>`).join('')}
+      </select>
+      <button onclick="removeScorer(${mid},${s.id})">🗑</button>
+    </div>`).join('');
+}
+
+function renderAllMatches() {
+  const el = document.getElementById('match-list');
+  if (!matches.length) { el.innerHTML='<div class="empty-state">「試合を追加」ボタンで記録を開始</div>'; return; }
+  el.innerHTML = matches.map(m=>`
+    <div class="match-card">
+      <div class="match-header">
+        <div class="match-header-inner"><span class="match-num">第${m.num}試合</span></div>
+        <button class="btn btn-sm btn-dark" onclick="removeMatch(${m.id})">削除</button>
+      </div>
+      <div class="match-body">
+        <div class="form-row" style="margin-bottom:4px;">
+          <div><label>相手チーム</label><input type="text" value="${m.opponent}" placeholder="チーム名" oninput="updateField(${m.id},'opponent',this.value)"></div>
+          <div><label>試合名</label><input type="text" value="${m.venue}" placeholder="試合名" oninput="updateField(${m.id},'venue',this.value)"></div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 0 6px;border:1px solid var(--card-border);border-radius:10px;background:var(--input-bg);margin-bottom:10px;">
+          <div style="text-align:center;">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">FC熊野</div>
+            <div id="tk-${m.id}" class="score-total kumano">${totalK(m)}</div>
+          </div>
+          <div style="font-size:24px;color:var(--card-border);font-weight:900;">—</div>
+          <div style="text-align:center;">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;" id="opp-name-${m.id}">${m.opponent||'相手'}</div>
+            <div id="to-${m.id}" class="score-total opp">${totalO(m)}</div>
+          </div>
+        </div>
+
+        ${resBadge(m.id, m)}
+
+        <div class="slabel" style="margin-top:12px;"><span style="color:#1a6bbf;font-size:14px;">●</span> 得点カウント</div>
+        <div id="sc-${m.id}"></div>
+        <div class="form-row" style="margin-top:6px;">
+          <button class="btn btn-outline btn-sm" onclick="addScorer(${m.id},'h1')">＋前半</button>
+          <button class="btn btn-outline btn-sm" onclick="addScorer(${m.id},'h2')">＋後半</button>
+          <button class="btn btn-outline btn-sm" onclick="addScorer(${m.id},'pk')">＋PK</button>
+        </div>
+
+        <div class="slabel" style="margin-top:12px;">🔴 失点カウント</div>
+        <div class="concede-row">
+          <span class="concede-label">前半</span>
+          <button class="btn-concede" id="concede-btn-${m.id}-h1" onclick="stepConcede(${m.id},'h1',1)">＋ 失点</button>
+          <span class="concede-count" id="cc-${m.id}-h1">${m.scores.h1_o||0}</span>
+          <button class="btn-concede-minus" onclick="stepConcede(${m.id},'h1',-1)">－</button>
+        </div>
+        <div class="concede-row">
+          <span class="concede-label">後半</span>
+          <button class="btn-concede" id="concede-btn-${m.id}-h2" onclick="stepConcede(${m.id},'h2',1)">＋ 失点</button>
+          <span class="concede-count" id="cc-${m.id}-h2">${m.scores.h2_o||0}</span>
+          <button class="btn-concede-minus" onclick="stepConcede(${m.id},'h2',-1)">－</button>
+        </div>
+
+        <div class="slabel" style="margin-top:10px;">🥅 PK（任意）</div>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <span style="font-size:12px;color:var(--text-muted);">FC熊野</span>
+          <div class="score-stepper">
+            <button onclick="stepScore(${m.id},'pk_k',-1)">−</button>
+            <span class="val" id="sv-${m.id}-pk_k">${m.scores.pk_k||0}</span>
+            <button onclick="stepScore(${m.id},'pk_k',1)">＋</button>
+          </div>
+          <span style="font-size:12px;color:var(--text-muted);" id="opp-pk-${m.id}">${m.opponent||'相手'}</span>
+          <div class="score-stepper">
+            <button onclick="stepScore(${m.id},'pk_o',-1)">−</button>
+            <span class="val" id="sv-${m.id}-pk_o">${m.scores.pk_o||0}</span>
+            <button onclick="stepScore(${m.id},'pk_o',1)">＋</button>
+          </div>
+        </div>
+      </div>
+    </div>`).join('');
+  matches.forEach(m=>renderScorerList(m.id));
+}
+
+// ===== 試合結果ページ =====
+function renderResultPage() {
+  const date = document.getElementById('report-date').value;
+  const grade = reportMeta.grade || 'FC熊野';
+  const author = reportMeta.author || '';
+  const metaEl = document.getElementById('rs-meta');
+  if (metaEl) {
+    const d = date ? new Date(date).toLocaleDateString('ja-JP', {year:'numeric',month:'long',day:'numeric'}) : '';
+    metaEl.textContent = [grade, d, author ? author : ''].filter(Boolean).join('　');
+  }
+  const el = document.getElementById('rs-matches');
+  if (!el) return;
+  if (!matches.length) {
+    el.innerHTML = '<div style="text-align:center;color:#aaa;padding:20px;font-size:13px;">試合データがありません</div>';
+    return;
+  }
+  el.innerHTML = matches.map((m) => {
+    const k = totalK(m), o = totalO(m);
+    let resultColor, resultText, resultBg;
+    if (k > o || (k === o && m.scores.pk_k > m.scores.pk_o)) {
+      resultColor = '#1a7a3f'; resultText = '勝利'; resultBg = '#e8f5ee';
+    } else if (k < o || (k === o && m.scores.pk_k < m.scores.pk_o && m.scores.pk_k + m.scores.pk_o > 0)) {
+      resultColor = '#c0392b'; resultText = '敗北'; resultBg = '#fdecea';
+    } else {
+      resultColor = '#b7950b'; resultText = '引き分け'; resultBg = '#fef9e7';
+    }
+    const scorerNames = m.scorers.map(s => { const p = players.find(p=>p.id==s.playerId); return p?p.name:''; }).filter(Boolean);
+    const hasPK = m.scores.pk_k + m.scores.pk_o > 0;
+    return `
+      <div style="border:1px solid #e0e0e0;border-radius:10px;margin-bottom:10px;overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#f5f5f5;padding:7px 12px;">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:#555;">第${m.num}試合${m.venue?' — '+m.venue:''}</span>
+          <span style="background:${resultBg};color:${resultColor};border:1px solid ${resultColor}33;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">${resultText}</span>
+        </div>
+        <div style="padding:10px 12px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <span style="font-size:13px;font-weight:700;min-width:70px;color:#1a2a1f;">FC熊野</span>
+            <span style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#1a7a3f;min-width:24px;text-align:center;">${k}</span>
+            <span style="font-size:18px;color:#ccc;font-weight:700;">—</span>
+            <span style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#888;min-width:24px;text-align:center;">${o}</span>
+            <span style="font-size:13px;font-weight:700;color:#555;">${m.opponent||'相手'}</span>
+          </div>
+          <div style="font-size:11px;color:#888;margin-bottom:${scorerNames.length?'6px':'0'};">
+            前半 ${m.scores.h1_k}–${m.scores.h1_o}　後半 ${m.scores.h2_k}–${m.scores.h2_o}${hasPK?' PK '+m.scores.pk_k+'–'+m.scores.pk_o:''}
+          </div>
+          ${scorerNames.length ? `<div style="font-size:12px;color:#2d7a4f;"><span style="font-size:13px;">⚽</span> ${scorerNames.join('、')}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function shareResult() {
+  const date = document.getElementById('report-date').value;
+  const grade = reportMeta.grade || 'FC熊野';
+  const text = buildShareText(date, grade);
+  if (navigator.share) {
+    try { await navigator.share({title:`FC熊野 ${grade} 試合結果`, text}); return; } catch(e){}
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('📋 コピーしました！LINEに貼り付けてください');
+  } catch(e) { showToast('共有できませんでした'); }
+}
+
+// ===== PDF / 共有 =====
+function printReport() { window.print(); }
+async function sharePDF() {
+  const date = document.getElementById('report-date').value;
+  const grade = reportMeta.grade || 'FC熊野';
+  const text = buildShareText(date, grade);
+  if (navigator.share) {
+    try { await navigator.share({title:`FC熊野 ${grade} 試合結果`, text}); return; } catch(e){}
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('📋 コピーしました！LINEに貼り付けてください');
+  } catch(e) { window.print(); }
+}
+function buildShareText(date, grade) {
+  let txt = `⚽ FC熊野 ${grade} 試合結果\n📅 ${date}\n${'─'.repeat(20)}\n`;
+  matches.forEach(m => {
+    const k=totalK(m), o=totalO(m);
+    const res = k>o?'✅勝利':k<o?'❌敗北':'🤝引き分け';
+    txt += `\n【第${m.num}試合】${m.opponent?'vs '+m.opponent:''} ${res}\n`;
+    txt += `　FC熊野 ${k} - ${o} ${m.opponent||'相手'}\n`;
+    txt += `　(前半${m.scores.h1_k}-${m.scores.h1_o} / 後半${m.scores.h2_k}-${m.scores.h2_o}`;
+    if(m.scores.pk_k+m.scores.pk_o>0) txt+=` / PK${m.scores.pk_k}-${m.scores.pk_o}`;
+    txt += `)\n`;
+    const snames = m.scorers.map(s=>{const p=players.find(p=>p.id==s.playerId);return p?p.name:'';}).filter(Boolean);
+    if(snames.length) txt+=`　⚽ ${snames.join('、')}\n`;
+  });
+  return txt;
+}
+
+// ===== 当番 =====
+function getDutyData() {
+  return JSON.parse(localStorage.getItem('fc_duty') || '{}');
+}
+function saveDutyData(d) {
+  localStorage.setItem('fc_duty', JSON.stringify(d));
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action:'saveDuty', data:JSON.stringify(d)}).catch(function(){});
+  }
+}
+
+function assignDuty(sid, name) {
+  var d = getDutyData();
+  d[sid] = name;
+  saveDutyData(d);
+  renderDutyPage();
+  renderAttendancePage(); // 日付横の当番名も更新
+}
+
+function clearDuty(sid) {
+  var d = getDutyData();
+  delete d[sid];
+  saveDutyData(d);
+  renderDutyPage();
+  renderAttendancePage();
+}
+
+// 当番候補を求める：当日◯ かつ 翌日程も◯
+function getDutyCandidates(sid) {
+  var scheds = getSchedules().filter(function(s){return !s.archived;});
+  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
+  var idx = scheds.findIndex(function(s){return s.id===sid;});
+  if (idx < 0) return [];
+  var nextSched = scheds[idx+1]; // 翌日程
+  var attData = getAttendanceData();
+  var curAtt = attData[sid] || {};
+  var nextAtt = nextSched ? (attData[nextSched.id] || {}) : {};
+  // 当日◯ かつ 翌日程も◯（翌日程なければ当日◯のみ）
+  return getParents().filter(function(p) {
+    if (curAtt[p] !== '◯') return false;
+    if (nextSched && nextAtt[p] !== '◯') return false;
+    return true;
+  });
+}
+
+// 各家族の累計当番回数
+function getDutyCounts() {
+  var d = getDutyData();
+  var counts = {};
+  getParents().forEach(function(p){ counts[p] = 0; });
+  Object.values(d).forEach(function(name){
+    if (counts[name] !== undefined) counts[name]++;
+  });
+  return counts;
+}
+
+// 月別当番回数
+function getDutyMonthly() {
+  var d = getDutyData();
+  var scheds = getSchedules();
+  var monthly = {}; // {月: {家族: 回数}}
+  Object.entries(d).forEach(function(entry) {
+    var sid = entry[0], name = entry[1];
+    var s = scheds.find(function(x){return x.id===sid;});
+    if (!s) return;
+    var month = s.date.substring(0, 7); // YYYY-MM
+    if (!monthly[month]) monthly[month] = {};
+    monthly[month][name] = (monthly[month][name] || 0) + 1;
+  });
+  return monthly;
+}
+
+function renderDutyPage() {
+  var scheds = getSchedules().filter(function(s){return !s.archived;});
+  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
+  var dutyData = getDutyData();
+  var counts = getDutyCounts();
+  var weekdays = ['日','月','火','水','木','金','土'];
+  var el = document.getElementById('duty-list');
+  if (!el) return;
+
+  if (!scheds.length) {
+    el.innerHTML = '<div class="empty-state">日程がありません</div>';
+  } else {
+    var html = '';
+    scheds.forEach(function(s) {
+      var dateObj = new Date(s.date);
+      var wd = weekdays[dateObj.getDay()];
+      var dateLabel = s.date.replace(/^2026-/,'').replace(/-/,'/') + '(' + wd + ')';
+      var assigned = dutyData[s.id] || '';
+      var candidates = getDutyCandidates(s.id);
+      // 候補を累計回数昇順でソート（最少優先）
+      candidates.sort(function(a,b){ return (counts[a]||0) - (counts[b]||0); });
+      var suggested = candidates.length > 0 ? candidates[0] : '';
+
+      var candidateButtons = candidates.map(function(p) {
+        var isSuggested = p === suggested;
+        var isAssigned = p === assigned;
+        var bg = isAssigned ? '#2d7a4f' : isSuggested ? '#e8f5ee' : '#f5f5f5';
+        var co = isAssigned ? 'white' : isSuggested ? '#2d7a4f' : '#888';
+        var bd = isAssigned ? '#2d7a4f' : isSuggested ? '#a8d5b8' : '#e0e0e0';
+        return '<button class="duty-assign-btn" data-sid="'+s.id+'" data-name="'+p+'" style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+bd+';background:'+bg+';color:'+co+';margin:2px;">' +
+          p + '（'+counts[p]+'回）' + (isSuggested&&!isAssigned?' ★':'') +
+        '</button>';
+      }).join('');
+
+      html +=
+        '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+            '<div>' +
+              '<span style="font-size:14px;font-weight:700;color:var(--green);">' + dateLabel + '</span>' +
+              '<span style="font-size:12px;color:var(--text-muted);margin-left:6px;">' + s.grade + '</span>' +
+            '</div>' +
+            (assigned
+              ? '<div style="display:flex;align-items:center;gap:6px;">' +
+                  '<span style="background:#2d7a4f;color:white;border-radius:6px;font-size:12px;font-weight:700;padding:2px 10px;">当番: '+assigned+'</span>' +
+                  '<button class="duty-clear-btn" data-sid="'+s.id+'" style="background:none;border:none;color:#ccc;font-size:13px;cursor:pointer;">✕</button>' +
+                '</div>'
+              : '<span style="font-size:11px;color:#ccc;">未確定</span>') +
+          '</div>' +
+          (candidates.length > 0
+            ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">候補（★ = 推奨）</div>' +
+              '<div style="display:flex;flex-wrap:wrap;gap:2px;">' + candidateButtons + '</div>'
+            : '<div style="font-size:12px;color:#e6a817;background:#fef9e7;border-radius:6px;padding:5px 10px;">⚠ 候補なし（出欠未入力の可能性）</div>') +
+        '</div>';
+    });
+    el.innerHTML = html;
+  }
+
+  // 月別推移
+  var monthly = getDutyMonthly();
+  var months = Object.keys(monthly).sort();
+  var mel = document.getElementById('duty-monthly');
+  if (!mel) return;
+  if (!months.length) {
+    mel.innerHTML = '<div class="empty-state">当番を確定すると表示されます</div>';
+    return;
+  }
+  var mhtml = '<div style="overflow-x:auto;">';
+  // ヘッダー
+  mhtml += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  mhtml += '<tr><th style="text-align:left;padding:5px 8px;background:var(--accent-light);color:var(--green);border:1px solid var(--card-border);">家族</th>';
+  months.forEach(function(m) {
+    var label = m.replace(/^2026-/,'') + '月';
+    mhtml += '<th style="text-align:center;padding:5px 8px;background:var(--accent-light);color:var(--green);border:1px solid var(--card-border);">' + label + '</th>';
+  });
+  mhtml += '<th style="text-align:center;padding:5px 8px;background:var(--accent-light);color:var(--green);border:1px solid var(--card-border);">合計</th></tr>';
+  // 各家族
+  var totals = getDutyCounts();
+  getParents().forEach(function(p) {
+    mhtml += '<tr><td style="padding:5px 8px;border:1px solid var(--card-border);font-weight:600;">' + p + '</td>';
+    months.forEach(function(m) {
+      var cnt = (monthly[m] && monthly[m][p]) || 0;
+      var bg = cnt > 0 ? 'background:#e8f5ee;color:#2d7a4f;font-weight:700;' : 'color:#ccc;';
+      mhtml += '<td style="text-align:center;padding:5px 8px;border:1px solid var(--card-border);' + bg + '">' + (cnt||'-') + '</td>';
+    });
+    mhtml += '<td style="text-align:center;padding:5px 8px;border:1px solid var(--card-border);font-weight:700;background:#f5f5f5;">' + totals[p] + '</td></tr>';
+  });
+  mhtml += '</table></div>';
+  mel.innerHTML = mhtml;
+}
+
+// ===== 出欠・配車イベント委譲 =====
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.att-btn');
+  if (btn) { setAttendance(btn.dataset.sid, btn.dataset.parent, btn.dataset.val); return; }
+  var cb = e.target.closest('.confirm-btn');
+  if (cb) { confirmSchedule(cb.dataset.sid); return; }
+  var db = e.target.closest('.del-sched-btn');
+  if (db) { deleteSchedule(db.dataset.sid); return; }
+  var ct = e.target.closest('.carpool-toggle-btn');
+  if (ct) { toggleCarpool(ct.dataset.sid); return; }
+  var lt = e.target.closest('.lock-toggle-btn');
+  if (lt) { toggleLock(lt.dataset.sid); return; }
+  var pl = e.target.closest('.personal-lock-btn');
+  if (pl) { togglePersonalLock(pl.dataset.sid, pl.dataset.parent); return; }
+  var da = e.target.closest('.duty-assign-btn');
+  if (da) { assignDuty(da.dataset.sid, da.dataset.name); return; }
+  var dc = e.target.closest('.duty-clear-btn');
+  if (dc) { clearDuty(dc.dataset.sid); return; }
+});
+document.addEventListener('change', function(e) {
+  var ds = e.target.closest('.cp-drive-sel');
+  if (ds) { setCarpoolDrive(ds.dataset.sid, ds.dataset.parent, ds.value); return; }
+  var cn = e.target.closest('.cp-num');
+  if (cn) { setCarpoolNum(cn.dataset.sid, cn.dataset.parent, cn.dataset.field, cn.value); }
+});
+
+</script>
+</body>
+</html>
