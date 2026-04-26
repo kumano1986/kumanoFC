@@ -342,11 +342,11 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
     </div>
     <div style="padding:12px;">
       <!-- 自分の家族 -->
-      <div class="card" style="border:2px solid var(--green);">
+      <div class="card" id="my-family-card" style="border:2px solid var(--green);">
         <div class="card-title">👤 自分の家族</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認で自分の行だけ入力できます</div>
-        <div id="my-family-display" style="font-size:16px;font-weight:700;color:var(--green);margin-bottom:12px;"></div>
-        <button class="btn btn-outline btn-full" onclick="showFamilySelectModal()">家族名を変更する</button>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認で自分の行だけ入力できます<br><b>※出欠確認を使うには必ず選択してください</b></div>
+        <div id="my-family-display" style="font-size:16px;font-weight:700;margin-bottom:12px;"></div>
+        <button class="btn btn-primary btn-full" onclick="showFamilySelectModal()">👤 家族を選択する</button>
       </div>
       <!-- 選手登録 -->
       <div class="card">
@@ -667,7 +667,11 @@ function updateMyFamilyDisplay() {
   var el = document.getElementById('my-family-display');
   if (!el) return;
   var name = getMyFamily();
-  el.textContent = name ? '👤 ' + name : '（未設定）';
+  if (name) {
+    el.innerHTML = '<span style="color:var(--green);">👤 ' + name + '</span>';
+  } else {
+    el.innerHTML = '<span style="color:#e6a817;">⚠️ 未設定（出欠確認が使えません）</span>';
+  }
 }
 
 function checkFirstVisit() {
@@ -1045,6 +1049,11 @@ function importFromExcel() {
 function openSettings() {
   document.getElementById('modal-settings').style.display = 'flex';
   updateMyFamilyDisplay();
+  // 未設定時はカードを黄色枠で強調
+  var card = document.getElementById('my-family-card');
+  if (card) {
+    card.style.border = getMyFamily() ? '2px solid var(--green)' : '2px solid #e6a817';
+  }
   renderPlayers();
   renderFamilies();
 }
@@ -1106,11 +1115,23 @@ function renderAttendancePage() {
     if (myFamily) {
       badge.innerHTML = '👤 <span style="cursor:pointer;text-decoration:underline;" onclick="showFamilySelectModal()">'+myFamily+'</span> として入力中';
     } else {
-      badge.innerHTML = '<span style="cursor:pointer;color:#e6a817;" onclick="showFamilySelectModal()">⚠ 家族を選択してください</span>';
+      badge.innerHTML = '';
     }
   }
   var el = document.getElementById('attendance-list');
   if (!el) return;
+
+  // 家族未設定の場合はブロック
+  if (!myFamily) {
+    el.innerHTML =
+      '<div class="card" style="text-align:center;padding:28px 20px;">' +
+        '<div style="font-size:36px;margin-bottom:12px;">👤</div>' +
+        '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px;">家族が設定されていません</div>' +
+        '<div style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6;">出欠確認を入力するには<br>まず家族を選択してください</div>' +
+        '<button onclick="openSettings()" style="background:var(--green);color:white;border:none;border-radius:10px;padding:12px 28px;font-size:14px;font-weight:700;cursor:pointer;">⚙️ 設定から家族を選択する</button>' +
+      '</div>';
+    return;
+  }
   var scheds = getSchedules().filter(function(s){return !s.archived;});
   scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
   var attData  = getAttendanceData();
@@ -1542,7 +1563,7 @@ async function updateField(id, field, value) {
   const m = matches.find(m=>m.id===id); if (!m) return;
   if (field.startsWith('scores.')) m.scores[field.replace('scores.','')] = Math.max(0, parseInt(value)||0);
   else m[field] = value;
-  await saveMatches();
+  await saveMatchesToCloud();
   refreshMatchUI(id, m);
 }
 
@@ -1551,7 +1572,7 @@ async function stepScore(matchId, field, delta) {
   const m = matches.find(m=>m.id===matchId); if(!m) return;
   m.scores[field] = Math.max(0, (m.scores[field]||0) + delta);
   // 得点者カウント連動（熊野の得点のみ）
-  await saveMatches();
+  await saveMatchesToCloud();
   refreshMatchUI(matchId, m);
   // スコア数字アニメ
   const el = document.getElementById(`sv-${matchId}-${field}`);
@@ -1563,7 +1584,7 @@ async function stepConcede(matchId, half, delta) {
   const m = matches.find(m=>m.id===matchId); if(!m) return;
   const key = half === 'h1' ? 'h1_o' : 'h2_o';
   m.scores[key] = Math.max(0, (m.scores[key]||0) + delta);
-  await saveMatches();
+  await saveMatchesToCloud();
   refreshMatchUI(matchId, m);
   if (delta > 0) {
     const btn = document.getElementById(`concede-btn-${matchId}-${half}`);
@@ -1612,14 +1633,14 @@ async function addScorer(mid, period) {
   if (period === 'h1') m.scores.h1_k = (m.scores.h1_k||0) + 1;
   else if (period === 'h2') m.scores.h2_k = (m.scores.h2_k||0) + 1;
   else if (period === 'pk') m.scores.pk_k = (m.scores.pk_k||0) + 1;
-  await saveMatches();
+  await saveMatchesToCloud();
   refreshMatchUI(mid, m);
   renderScorerList(mid);
 }
 async function updateScorer(mid, sid, pid) {
   const m = matches.find(m=>m.id===mid); if(!m) return;
   const s = m.scorers.find(s=>s.id===sid); if(s) s.playerId=parseInt(pid);
-  await saveMatches();
+  await saveMatchesToCloud();
 }
 async function removeScorer(mid, sid) {
   const m = matches.find(m=>m.id===mid); if(!m) return;
@@ -1631,7 +1652,7 @@ async function removeScorer(mid, sid) {
     else if (s.period==='pk') m.scores.pk_k = Math.max(0,(m.scores.pk_k||0)-1);
   }
   m.scorers = m.scorers.filter(s=>s.id!==sid);
-  await saveMatches();
+  await saveMatchesToCloud();
   refreshMatchUI(mid, m);
   renderScorerList(mid);
 }

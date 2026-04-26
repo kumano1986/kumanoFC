@@ -1,14 +1,12 @@
 {
-  "name": "FC熊野 試合結果報告書",
+  "name": "FC熊野",
   "short_name": "FC熊野",
-  "description": "FC熊野 試合結果記録・PDF共有アプリ",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#2d7a4f",
-  "theme_color": "#2d7a4f",
-  "orientation": "portrait",
+  "background_color": "#1a7a3f",
+  "theme_color": "#1a7a3f",
   "icons": [
-    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {"src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png"}
   ]
 }

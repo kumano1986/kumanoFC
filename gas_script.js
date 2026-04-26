@@ -57,17 +57,74 @@ function getMatches() {
   const sheet = getSheet(SHEET_MATCHES);
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
-  return data.slice(1).filter(r => r[0]).map(r => JSON.parse(r[0]));
+  // ヘッダー行をスキップしてJSONに復元
+  return data.slice(1).filter(r => r[0]).map(r => ({
+    id:       r[0],
+    num:      r[1],
+    opponent: r[2] || '',
+    venue:    r[3] || '',
+    scores: {
+      h1_k: r[4]||0, h2_k: r[5]||0, pk_k: r[6]||0,
+      h1_o: r[7]||0, h2_o: r[8]||0, pk_o: r[9]||0
+    },
+    scorers: r[10] ? JSON.parse(r[10]) : []
+  }));
 }
 
 function saveMatches(matches) {
   const sheet = getSheet(SHEET_MATCHES);
   sheet.clearContents();
-  sheet.getRange(1,1,1,1).setValues([['データ（JSON）']]);
-  sheet.getRange(1,1,1,1).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
-  if (matches.length) {
-    sheet.getRange(2,1,matches.length,1).setValues(matches.map(m=>[JSON.stringify(m)]));
-  }
+
+  // ヘッダー
+  const headers = ['ID','第N試合','試合名','相手','前半(熊野)','後半(熊野)','PK(熊野)','前半(相手)','後半(相手)','PK(相手)','得点者(JSON)'];
+  sheet.getRange(1,1,1,headers.length).setValues([headers]);
+  sheet.getRange(1,1,1,headers.length)
+    .setFontWeight('bold')
+    .setBackground('#2d7a4f')
+    .setFontColor('white');
+
+  if (!matches.length) return { success: true };
+
+  // 選手IDから名前を引くマップを作成
+  const players = getPlayers();
+  const playerMap = {};
+  players.forEach(p => { playerMap[String(p.id)] = p.name; });
+
+  const rows = matches.map(m => {
+    // 得点者を「名前（前半）、名前（後半）」形式に変換
+    const scorerNames = (m.scorers || []).map(s => {
+      const name = playerMap[String(s.playerId)] || '不明';
+      const period = s.period === 'h1' ? '前半' : s.period === 'h2' ? '後半' : 'PK';
+      return name + '(' + period + ')';
+    }).join('、');
+    return [
+      m.id,
+      '第' + m.num + '試合',
+      m.venue || '',
+      m.opponent || '',
+      m.scores.h1_k || 0,
+      m.scores.h2_k || 0,
+      m.scores.pk_k || 0,
+      m.scores.h1_o || 0,
+      m.scores.h2_o || 0,
+      m.scores.pk_o || 0,
+      scorerNames
+    ];
+  });
+
+  sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+
+  // 列幅を自動調整
+  sheet.autoResizeColumns(1, headers.length);
+
+  // 結果に応じて行に色付け
+  rows.forEach((row, i) => {
+    const kumano = (row[4]||0) + (row[5]||0);
+    const aite   = (row[7]||0) + (row[8]||0);
+    const bg = kumano > aite ? '#e8f5ee' : kumano < aite ? '#fdecea' : '#fef9e7';
+    sheet.getRange(i+2, 1, 1, headers.length).setBackground(bg);
+  });
+
   return { success: true };
 }
 
