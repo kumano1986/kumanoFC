@@ -797,6 +797,17 @@ function deleteSchedule(sid) {
   if (!confirm('この日程を削除しますか？')) return;
   var scheds = getSchedules().filter(function(s){return s.id!==sid;});
   saveSchedules(scheds);
+  // ローカルの出欠・配車データからも削除
+  var attData = getAttendanceData();
+  delete attData[sid];
+  saveAttendanceData(attData);
+  var cpData = getCarpoolData();
+  delete cpData[sid];
+  saveCarpoolData(cpData);
+  // クラウドからも削除
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action: 'deleteAttendanceRow', sid: sid}).catch(function(){});
+  }
   renderAttendancePage();
 }
 

@@ -23,6 +23,7 @@ function handleRequest(e) {
     else if (p.action === 'getAttendance')    result = getAttendance();
     else if (p.action === 'saveAttendance')   result = saveAttendance(JSON.parse(p.data));
     else if (p.action === 'clearAttendance')  result = clearAttendance();
+    else if (p.action === 'deleteAttendanceRow') result = deleteAttendanceRow(p.sid);
     else result = { error: 'Unknown action' };
   } catch(err) { result = { error: err.toString() }; }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
@@ -284,6 +285,21 @@ function clearAttendance() {
   if (sheet) {
     sheet.clearContents();
     sheet.clearFormats();
+  }
+  return { success: true };
+}
+
+// ===== 出欠データ1行削除（日程ID指定） =====
+function deleteAttendanceRow(sid) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_ATTENDANCE);
+  if (!sheet) return { success: true };
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(sid)) {
+      sheet.deleteRow(i + 1);
+      break;
+    }
   }
   return { success: true };
 }
