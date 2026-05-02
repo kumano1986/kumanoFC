@@ -564,14 +564,20 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
         <option>3年</option><option>4年</option><option>5年</option><option>6年</option>
         <option>1・2年</option><option>2・3年</option><option>1・2・3年</option><option>4・5・6年</option>
       </select>
-      <label>場所・時間</label>
-      <div style="display:flex;gap:6px;margin-bottom:10px;">
+      <label>場所</label>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
         <select id="edit-sched-venue" style="flex:1;margin-bottom:0;"></select>
-        <button class="btn btn-outline btn-sm" onclick="showEditVenueInput()">＋</button>
+        <button class="btn btn-outline btn-sm" onclick="showEditVenueInput()">＋新規</button>
       </div>
-      <div id="edit-venue-input-area" style="display:none;margin-bottom:10px;">
-        <input type="text" id="edit-venue-text" placeholder="例: 高島平多目的 8:50~11:00">
+      <div id="edit-venue-input-area" style="display:none;margin-bottom:6px;">
+        <input type="text" id="edit-venue-text" placeholder="例: 高島平多目的">
         <button class="btn btn-primary btn-sm" onclick="addEditVenue()" style="margin-top:4px;width:100%;">場所を登録して選択</button>
+      </div>
+      <label>時間</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <input type="time" id="edit-sched-time-start" style="flex:1;margin-bottom:0;">
+        <span style="color:var(--text-muted);font-size:13px;">〜</span>
+        <input type="time" id="edit-sched-time-end" style="flex:1;margin-bottom:0;">
       </div>
       <label>備考（任意）</label>
       <input type="text" id="edit-sched-note" style="margin-bottom:6px;">
@@ -861,15 +867,25 @@ function showEditScheduleModal(sid) {
   document.getElementById('edit-sched-note').value = s.note || '';
   document.getElementById('edit-sched-carpool').checked = s.carpool || false;
   document.getElementById('edit-venue-input-area').style.display = 'none';
+
+  // venue から場所と時間を分離（例: "高島平多目的 8:50〜11:00"）
+  var venue = s.venue || '';
+  var timeMatch = venue.match(/(\d{1,2}:\d{2})[〜~](\d{1,2}:\d{2})/);
+  var place = timeMatch ? venue.replace(/\s*\d{1,2}:\d{2}[〜~]\d{1,2}:\d{2}/, '').trim() : venue;
+  var tStart = timeMatch ? timeMatch[1] : '';
+  var tEnd   = timeMatch ? timeMatch[2] : '';
+
+  // 場所プルダウンを更新
   var sel = document.getElementById('edit-sched-venue');
   var venues = getVenues();
+  // 現在の場所がリストにない場合は追加
+  if (place && venues.indexOf(place) < 0) venues = venues.concat([place]);
   sel.innerHTML = venues.map(function(v){
-    return '<option value="'+v+'"'+(v===s.venue?' selected':'')+'>'+v+'</option>';
+    return '<option value="'+v+'"'+(v===place?' selected':'')+'>'+v+'</option>';
   }).join('');
-  // 現在の会場が一覧にない場合は追加
-  if (s.venue && venues.indexOf(s.venue) < 0) {
-    sel.innerHTML += '<option value="'+s.venue+'" selected>'+s.venue+'</option>';
-  }
+
+  document.getElementById('edit-sched-time-start').value = tStart;
+  document.getElementById('edit-sched-time-end').value = tEnd;
   document.getElementById('modal-edit-schedule').style.display = 'flex';
 }
 
@@ -896,11 +912,15 @@ function saveEditSchedule() {
   var sid    = document.getElementById('edit-sched-id').value;
   var date   = document.getElementById('edit-sched-date').value;
   var grade  = document.getElementById('edit-sched-grade').value;
-  var venue  = document.getElementById('edit-sched-venue').value;
+  var place  = document.getElementById('edit-sched-venue').value;
+  var tStart = document.getElementById('edit-sched-time-start').value;
+  var tEnd   = document.getElementById('edit-sched-time-end').value;
   var note   = document.getElementById('edit-sched-note').value.trim();
   var carpool = document.getElementById('edit-sched-carpool').checked;
-  if (!date) { showToast('日付を入力してください'); return; }
-  if (!venue) { showToast('場所を選択してください'); return; }
+  if (!date)  { showToast('日付を入力してください'); return; }
+  if (!place) { showToast('場所を選択してください'); return; }
+  var timeStr = tStart && tEnd ? ' ' + tStart + '〜' + tEnd : tStart ? ' ' + tStart + '〜' : '';
+  var venue = place + timeStr;
   var scheds = getSchedules();
   var s = scheds.find(function(x){return x.id===sid;});
   if (s) {
