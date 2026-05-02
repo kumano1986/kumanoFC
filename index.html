@@ -493,16 +493,22 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
           <option>1・2・3年</option>
           <option>4・5・6年</option>
         </select>
-        <label>場所・時間</label>
-        <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <label>場所</label>
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
           <select id="new-sched-venue" style="flex:1;margin-bottom:0;">
-            <option value="">選択または入力</option>
+            <option value="">選択してください</option>
           </select>
-          <button class="btn btn-outline btn-sm" onclick="showAddVenueInput()">＋</button>
+          <button class="btn btn-outline btn-sm" onclick="showAddVenueInput()">＋新規</button>
         </div>
-        <div id="new-venue-input-area" style="display:none;margin-bottom:10px;">
-          <input type="text" id="new-venue-text" placeholder="例: 高島平多目的 8:50~11:00">
+        <div id="new-venue-input-area" style="display:none;margin-bottom:6px;">
+          <input type="text" id="new-venue-text" placeholder="例: 高島平多目的">
           <button class="btn btn-primary btn-sm" onclick="addNewVenue()" style="margin-top:4px;width:100%;">場所を登録して選択</button>
+        </div>
+        <label>時間</label>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <input type="time" id="new-sched-time-start" style="flex:1;margin-bottom:0;">
+          <span style="color:var(--text-muted);font-size:13px;">〜</span>
+          <input type="time" id="new-sched-time-end" style="flex:1;margin-bottom:0;">
         </div>
         <label>備考（任意）</label>
         <input type="text" id="new-sched-note" placeholder="例: ★学年当番★" style="margin-bottom:6px;">
@@ -541,6 +547,40 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       <div style="display:flex;gap:8px;margin-top:14px;">
         <button class="btn btn-primary" onclick="doArchive()" style="flex:1;">アーカイブ実行</button>
         <button class="btn btn-outline" onclick="closeModal('modal-archive')" style="flex:1;">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 日程編集モーダル -->
+  <div id="modal-edit-schedule" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:flex-end;">
+    <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-height:85vh;overflow-y:auto;">
+      <div style="font-weight:700;font-size:16px;color:var(--green);margin-bottom:14px;">✏️ 日程を編集</div>
+      <input type="hidden" id="edit-sched-id">
+      <label>日付</label>
+      <input type="date" id="edit-sched-date" style="margin-bottom:10px;">
+      <label>学年</label>
+      <select id="edit-sched-grade" style="margin-bottom:10px;">
+        <option>全学年</option><option>キッズ</option><option>1年</option><option>2年</option>
+        <option>3年</option><option>4年</option><option>5年</option><option>6年</option>
+        <option>1・2年</option><option>2・3年</option><option>1・2・3年</option><option>4・5・6年</option>
+      </select>
+      <label>場所・時間</label>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <select id="edit-sched-venue" style="flex:1;margin-bottom:0;"></select>
+        <button class="btn btn-outline btn-sm" onclick="showEditVenueInput()">＋</button>
+      </div>
+      <div id="edit-venue-input-area" style="display:none;margin-bottom:10px;">
+        <input type="text" id="edit-venue-text" placeholder="例: 高島平多目的 8:50~11:00">
+        <button class="btn btn-primary btn-sm" onclick="addEditVenue()" style="margin-top:4px;width:100%;">場所を登録して選択</button>
+      </div>
+      <label>備考（任意）</label>
+      <input type="text" id="edit-sched-note" style="margin-bottom:6px;">
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;">
+        <input type="checkbox" id="edit-sched-carpool" style="width:auto;margin:0;"> 配車あり
+      </label>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="saveEditSchedule()" style="flex:1;">保存</button>
+        <button class="btn btn-outline" onclick="closeModal('modal-edit-schedule')" style="flex:1;">キャンセル</button>
       </div>
     </div>
   </div>
@@ -811,6 +851,85 @@ function deleteSchedule(sid) {
   renderAttendancePage();
 }
 
+// ===== 日程編集 =====
+function showEditScheduleModal(sid) {
+  var s = getSchedules().find(function(x){return x.id===sid;});
+  if (!s) return;
+  document.getElementById('edit-sched-id').value = sid;
+  document.getElementById('edit-sched-date').value = s.date;
+  document.getElementById('edit-sched-grade').value = s.grade;
+  document.getElementById('edit-sched-note').value = s.note || '';
+  document.getElementById('edit-sched-carpool').checked = s.carpool || false;
+  document.getElementById('edit-venue-input-area').style.display = 'none';
+  var sel = document.getElementById('edit-sched-venue');
+  var venues = getVenues();
+  sel.innerHTML = venues.map(function(v){
+    return '<option value="'+v+'"'+(v===s.venue?' selected':'')+'>'+v+'</option>';
+  }).join('');
+  // 現在の会場が一覧にない場合は追加
+  if (s.venue && venues.indexOf(s.venue) < 0) {
+    sel.innerHTML += '<option value="'+s.venue+'" selected>'+s.venue+'</option>';
+  }
+  document.getElementById('modal-edit-schedule').style.display = 'flex';
+}
+
+function showEditVenueInput() {
+  var area = document.getElementById('edit-venue-input-area');
+  area.style.display = area.style.display === 'none' ? 'block' : 'none';
+}
+
+function addEditVenue() {
+  var txt = document.getElementById('edit-venue-text').value.trim();
+  if (!txt) { showToast('場所を入力してください'); return; }
+  var venues = getVenues();
+  if (!venues.includes(txt)) { venues.push(txt); saveVenues(venues); }
+  var sel = document.getElementById('edit-sched-venue');
+  var opt = document.createElement('option');
+  opt.value = txt; opt.text = txt; sel.add(opt);
+  sel.value = txt;
+  document.getElementById('edit-venue-text').value = '';
+  document.getElementById('edit-venue-input-area').style.display = 'none';
+  showToast('場所を登録しました');
+}
+
+function saveEditSchedule() {
+  var sid    = document.getElementById('edit-sched-id').value;
+  var date   = document.getElementById('edit-sched-date').value;
+  var grade  = document.getElementById('edit-sched-grade').value;
+  var venue  = document.getElementById('edit-sched-venue').value;
+  var note   = document.getElementById('edit-sched-note').value.trim();
+  var carpool = document.getElementById('edit-sched-carpool').checked;
+  if (!date) { showToast('日付を入力してください'); return; }
+  if (!venue) { showToast('場所を選択してください'); return; }
+  var scheds = getSchedules();
+  var s = scheds.find(function(x){return x.id===sid;});
+  if (s) {
+    s.date = date;
+    s.grade = grade;
+    s.venue = venue;
+    s.note = note;
+    s.carpool = carpool;
+  }
+  saveSchedules(scheds);
+  closeModal('modal-edit-schedule');
+  renderAttendancePage();
+  showToast('日程を更新しました');
+}
+
+// ===== 日程の順番入れ替え =====
+function moveSchedule(sid, dir) {
+  var scheds = getSchedules();
+  var idx = scheds.findIndex(function(s){return s.id===sid;});
+  if (idx < 0) return;
+  var newIdx = dir === 'up' ? idx - 1 : idx + 1;
+  if (newIdx < 0 || newIdx >= scheds.length) return;
+  var tmp = scheds[idx];
+  scheds[idx] = scheds[newIdx];
+  scheds[newIdx] = tmp;
+  saveSchedules(scheds);
+  renderAttendancePage();
+}
+
 function toggleLock(sid) {
   var scheds = getSchedules();
   var s = scheds.find(function(x){return x.id===sid;});
@@ -903,17 +1022,24 @@ function addNewVenue() {
 }
 
 function addSchedule() {
-  var date = document.getElementById('new-sched-date').value;
-  var grade = document.getElementById('new-sched-grade').value;
-  var venue = document.getElementById('new-sched-venue').value;
-  var note = document.getElementById('new-sched-note').value.trim();
+  var date    = document.getElementById('new-sched-date').value;
+  var grade   = document.getElementById('new-sched-grade').value;
+  var place   = document.getElementById('new-sched-venue').value;
+  var tStart  = document.getElementById('new-sched-time-start').value;
+  var tEnd    = document.getElementById('new-sched-time-end').value;
+  var note    = document.getElementById('new-sched-note').value.trim();
   var carpool = document.getElementById('new-sched-carpool').checked;
-  if (!date) { showToast('日付を入力してください'); return; }
-  if (!venue) { showToast('場所を選択してください'); return; }
+  if (!date)  { showToast('日付を入力してください'); return; }
+  if (!place) { showToast('場所を選択してください'); return; }
+  // 場所と時間を結合（例: 高島平多目的 8:50~11:00）
+  var timeStr = tStart && tEnd ? ' ' + tStart + '〜' + tEnd : tStart ? ' ' + tStart + '〜' : '';
+  var venue = place + timeStr;
   var id = date + '_' + grade;
   var scheds = getSchedules();
+  // 同じIDがあれば連番で回避
+  var n = 2;
+  while (scheds.find(function(s){return s.id===id;})) { id = date+'_'+grade+'_'+n; n++; }
   scheds.push({id:id, date:date, grade:grade, venue:venue, note:note, carpool:carpool, archived:false});
-  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
   saveSchedules(scheds);
   closeModal('modal-add-schedule');
   renderAttendancePage();
@@ -1255,6 +1381,9 @@ function renderAttendancePage() {
           '</div>' +
           '<div style="display:flex;align-items:center;gap:6px;">' +
             '<div style="font-size:13px;font-weight:700;color:var(--green);white-space:nowrap;">◯ ' + maru + '名</div>' +
+            '<button class="edit-sched-btn" data-sid="'+s.id+'" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;font-size:13px;cursor:pointer;padding:2px 7px;">✏️</button>' +
+            '<button class="move-sched-btn" data-sid="'+s.id+'" data-dir="up" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;font-size:12px;cursor:pointer;padding:2px 6px;">↑</button>' +
+            '<button class="move-sched-btn" data-sid="'+s.id+'" data-dir="down" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;font-size:12px;cursor:pointer;padding:2px 6px;">↓</button>' +
             (!locked ? '<button class="carpool-toggle-btn" data-sid="'+s.id+'" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;border:none;cursor:pointer;'+(s.carpool?'background:#fff3cd;color:#b7950b;':'background:#f0f0f0;color:#aaa;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</button>' : '') +
             '<button class="del-sched-btn" data-sid="'+s.id+'" style="background:none;border:none;color:#ccc;font-size:16px;cursor:pointer;padding:0;">🗑</button>' +
           '</div>' +
@@ -2021,6 +2150,10 @@ document.addEventListener('click', function(e) {
   if (ct) { toggleCarpool(ct.dataset.sid); return; }
   var lt = e.target.closest('.lock-toggle-btn');
   if (lt) { toggleLock(lt.dataset.sid); return; }
+  var es = e.target.closest('.edit-sched-btn');
+  if (es) { showEditScheduleModal(es.dataset.sid); return; }
+  var ms = e.target.closest('.move-sched-btn');
+  if (ms) { moveSchedule(ms.dataset.sid, ms.dataset.dir); return; }
   var pl = e.target.closest('.personal-lock-btn');
   if (pl) { togglePersonalLock(pl.dataset.sid, pl.dataset.parent); return; }
   var da = e.target.closest('.duty-assign-btn');
