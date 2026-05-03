@@ -6,6 +6,8 @@ const SPREADSHEET_ID = '1OsLyIAeqP8MPGWRpQoSLM4Wrjgn0nGCUrQfeOosAFZg';
 const SHEET_PLAYERS = '選手';
 const SHEET_MATCHES = '試合';
 const SHEET_SUMMARY = '年度累積';
+const SHEET_ATTENDANCE = '出欠確認';
+const SHEET_MASTER = 'マスタ'; // 日程・家族・会場・試合名を1シートにJSON保存
 
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
@@ -24,9 +26,29 @@ function handleRequest(e) {
     else if (p.action === 'saveAttendance')   result = saveAttendance(JSON.parse(p.data));
     else if (p.action === 'clearAttendance')  result = clearAttendance();
     else if (p.action === 'deleteAttendanceRow') result = deleteAttendanceRow(p.sid);
+    // マスタデータ
+    else if (p.action === 'getMaster')      result = getMaster();
+    else if (p.action === 'saveMaster')     result = saveMaster(JSON.parse(p.data));
     else result = { error: 'Unknown action' };
   } catch(err) { result = { error: err.toString() }; }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ===== マスタデータ（日程・家族・会場・試合名） =====
+function getMaster() {
+  const sheet = getSheet(SHEET_MASTER);
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2 || !data[1][0]) return {};
+  try { return JSON.parse(data[1][0]); } catch(e) { return {}; }
+}
+
+function saveMaster(obj) {
+  const sheet = getSheet(SHEET_MASTER);
+  sheet.clearContents();
+  sheet.getRange(1,1).setValue('マスタデータ（JSON）');
+  sheet.getRange(1,1).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
+  sheet.getRange(2,1).setValue(JSON.stringify(obj));
+  return { success: true };
 }
 
 function getSheet(name) {
@@ -220,8 +242,6 @@ function updateSummaryTotal(sheet, headers) {
 }
 
 // ===== 出欠確認シート =====
-const SHEET_ATTENDANCE = '出欠確認';
-
 function getAttendance() {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_ATTENDANCE);
   if (!sheet) return {};

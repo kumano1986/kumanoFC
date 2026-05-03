@@ -665,6 +665,7 @@ function getParents() {
 function saveParents(arr) {
   _parentsCache = arr;
   localStorage.setItem('fc_parents', JSON.stringify(arr));
+  pushMasterToCloud();
 }
 // 後方互換のためPARENTSを動的プロキシとして定義（配列アクセスはgetParents()を使用）
 function PARENTS_LIST() { return getParents(); }
@@ -711,7 +712,7 @@ function getMatchNames() {
   var defaults = ['練習試合', '公式戦', 'リーグ戦', 'カップ戦', 'フレンドリーマッチ'];
   return JSON.parse(localStorage.getItem('fc_match_names') || JSON.stringify(defaults));
 }
-function saveMatchNames(arr) { localStorage.setItem('fc_match_names', JSON.stringify(arr)); }
+function saveMatchNames(arr) { localStorage.setItem('fc_match_names', JSON.stringify(arr)); pushMasterToCloud(); }
 
 function addMatchName() {
   var name = document.getElementById('input-match-name').value.trim();
@@ -797,7 +798,7 @@ function getVenues() {
   var defaults = ['高島平多目的','板七小','板二小','大谷口小','板五小'];
   return JSON.parse(localStorage.getItem('fc_venues') || JSON.stringify(defaults));
 }
-function saveVenues(v) { localStorage.setItem('fc_venues', JSON.stringify(v)); }
+function saveVenues(v) { localStorage.setItem('fc_venues', JSON.stringify(v)); pushMasterToCloud(); }
 
 // 日程リスト（localStorage永続）
 function getSchedules() {
@@ -812,7 +813,7 @@ function getSchedules() {
   ];
   return JSON.parse(localStorage.getItem('fc_schedules') || JSON.stringify(defaults));
 }
-function saveSchedules(s) { localStorage.setItem('fc_schedules', JSON.stringify(s)); }
+function saveSchedules(s) { localStorage.setItem('fc_schedules', JSON.stringify(s)); pushMasterToCloud(); }
 
 // 出欠データ（デフォルト未選択）
 function getAttendanceData() {
@@ -831,7 +832,7 @@ function saveAttendanceData(d) {
 function getCarpoolData() {
   return JSON.parse(localStorage.getItem('fc_carpool') || '{}');
 }
-function saveCarpoolData(d) { localStorage.setItem('fc_carpool', JSON.stringify(d)); }
+function saveCarpoolData(d) { localStorage.setItem('fc_carpool', JSON.stringify(d)); pushMasterToCloud(); }
 
 // 確定データ
 function getConfirmedData() {
@@ -1291,29 +1292,87 @@ function closeModal(id) {
 var _autoSyncTimer = null;
 var _lastSyncLabel = null;
 
+// ===== マスタデータのクラウド同期 =====
+var _masterPushTimer = null;
+function pushMasterToCloud() {
+  // デバウンス：連続保存を防ぐ
+  if (_masterPushTimer) clearTimeout(_masterPushTimer);
+  _masterPushTimer = setTimeout(function() {
+    if (typeof gasUrl === 'undefined' || !gasUrl) return;
+    var master = {
+      schedules:  JSON.parse(localStorage.getItem('fc_schedules') || '[]'),
+      parents:    JSON.parse(localStorage.getItem('fc_parents') || '[]'),
+      venues:     JSON.parse(localStorage.getItem('fc_venues') || '[]'),
+      matchNames: JSON.parse(localStorage.getItem('fc_match_names') || '[]'),
+      carpool:    JSON.parse(localStorage.getItem('fc_carpool') || '{}'),
+      duty:       JSON.parse(localStorage.getItem('fc_duty') || '{}')
+    };
+    gasReq({action: 'saveMaster', data: JSON.stringify(master)}).catch(function(){});
+  }, 1000);
+}
+
+async function pullMasterFromCloud() {
+  if (typeof gasUrl === 'undefined' || !gasUrl) return;
+  try {
+    var master = await gasReq({action: 'getMaster'});
+    if (!master || master.error) return;
+    if (master.schedules  && master.schedules.length)  { localStorage.setItem('fc_schedules',   JSON.stringify(master.schedules));  }
+    if (master.parents    && master.parents.length)    { localStorage.setItem('fc_parents',     JSON.stringify(master.parents));    _parentsCache = null; }
+    if (master.venues     && master.venues.length)     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
+    if (master.matchNames && master.matchNames.length) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
+    if (master.carpool    && Object.keys(master.carpool).length) { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
+    if (master.duty       && Object.keys(master.duty).length)    { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
+  } catch(e) {}
+}
+
 function startAutoSync() {
   stopAutoSync();
   _autoSyncTimer = setInterval(function() {
     if (typeof gasUrl === 'undefined' || !gasUrl) return;
+    // マスタデータも同期
+    gasReq({action:'getMaster'}).then(function(master) {
+      if (!master || master.error) return;
+      var masterChanged = false;
+      if (master.schedules  && master.schedules.length) {
+        var cur = localStorage.getItem('fc_schedules') || '[]';
+        var nw = JSON.stringify(master.schedules);
+        if (cur !== nw) { localStorage.setItem('fc_schedules', nw); masterChanged = true; }
+      }
+      if (master.parents && master.parents.length) {
+        var cur = localStorage.getItem('fc_parents') || '[]';
+        var nw = JSON.stringify(master.parents);
+        if (cur !== nw) { localStorage.setItem('fc_parents', nw); _parentsCache = null; masterChanged = true; }
+      }
+      if (master.venues && master.venues.length) {
+        localStorage.setItem('fc_venues', JSON.stringify(master.venues));
+      }
+      if (master.matchNames && master.matchNames.length) {
+        localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames));
+      }
+      if (master.carpool && Object.keys(master.carpool).length) {
+        localStorage.setItem('fc_carpool', JSON.stringify(master.carpool));
+      }
+      if (master.duty && Object.keys(master.duty).length) {
+        localStorage.setItem('fc_duty', JSON.stringify(master.duty));
+      }
+      if (masterChanged) renderAttendancePage();
+    }).catch(function(){});
+
+    // 出欠データ同期
     gasReq({action:'getAttendance'}).then(function(cloudData) {
       if (!cloudData || typeof cloudData !== 'object' || cloudData.error) return;
       if (!Object.keys(cloudData).length) return;
-
       var local = JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
       var myFamily = getMyFamily();
-
-      // クラウドデータの中で他の家族の変更があるか確認
       var hasOtherChange = false;
       Object.keys(cloudData).forEach(function(sid) {
         Object.keys(cloudData[sid] || {}).forEach(function(parent) {
-          if (parent === myFamily) return; // 自分は除外
+          if (parent === myFamily) return;
           var localVal = (local[sid] || {})[parent] || '';
           var cloudVal = cloudData[sid][parent] || '';
           if (localVal !== cloudVal) hasOtherChange = true;
         });
       });
-
-      // マージ処理（自分の行は常にローカル優先）
       var merged = JSON.parse(JSON.stringify(cloudData));
       Object.keys(local).forEach(function(sid) {
         if (!merged[sid]) merged[sid] = {};
@@ -1325,14 +1384,8 @@ function startAutoSync() {
           }
         });
       });
-
       localStorage.setItem('fc_attendance2', JSON.stringify(merged));
-
-      // 他の家族の変更があった時だけ再描画
-      if (hasOtherChange) {
-        renderAttendancePage();
-      }
-
+      if (hasOtherChange) renderAttendancePage();
       var now = new Date();
       var label = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
       var indEl = document.getElementById('sync-indicator');
@@ -1661,6 +1714,8 @@ async function syncAll() {
     localStorage.setItem('fc_players_permanent', JSON.stringify(players));
     localStorage.setItem('fc_players', JSON.stringify(players));
     localStorage.setItem('fc_matches', JSON.stringify(matches));
+    // マスタデータも取得
+    await pullMasterFromCloud();
     setConnected(true);
     renderPlayers(); renderAllMatches();
   } catch(e) {
