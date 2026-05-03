@@ -1304,8 +1304,6 @@ function startAutoSync() {
       Object.keys(local).forEach(function(sid) {
         if (!merged[sid]) merged[sid] = {};
         Object.keys(local[sid]).forEach(function(parent) {
-          // 自分の家族の行は常にローカル優先（空文字含む）
-          // 他の家族はローカルに値がある場合のみローカル優先
           if (parent === myFamily) {
             merged[sid][parent] = local[sid][parent];
           } else if (local[sid][parent]) {
@@ -1313,12 +1311,17 @@ function startAutoSync() {
           }
         });
       });
-      localStorage.setItem('fc_attendance2', JSON.stringify(merged));
+      var mergedStr = JSON.stringify(merged);
+      var currentStr = localStorage.getItem('fc_attendance2') || '{}';
+      // データが変わった時だけ保存・再描画
+      if (mergedStr !== currentStr) {
+        localStorage.setItem('fc_attendance2', mergedStr);
+        renderAttendancePage();
+      }
       var now = new Date();
       var label = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
       var indEl = document.getElementById('sync-indicator');
       if (indEl) indEl.textContent = '🔄 ' + label + ' 同期済';
-      renderAttendancePage();
     }).catch(function(){});
   }, 5000);
 }
