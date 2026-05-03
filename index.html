@@ -658,8 +658,7 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
 var _parentsCache = null;
 function getParents() {
   if (_parentsCache) return _parentsCache;
-  var defaults = ['矢島', '原', '田崎', '粂', '小野寺', '石井', '福嶋', '遠山'];
-  _parentsCache = JSON.parse(localStorage.getItem('fc_parents') || JSON.stringify(defaults));
+  _parentsCache = JSON.parse(localStorage.getItem('fc_parents') || '[]');
   return _parentsCache;
 }
 function saveParents(arr) {
@@ -802,16 +801,7 @@ function saveVenues(v) { localStorage.setItem('fc_venues', JSON.stringify(v)); p
 
 // 日程リスト（localStorage永続）
 function getSchedules() {
-  var defaults = [
-    {id:'2026-04-04_全学年',date:'2026-04-04',grade:'全学年',venue:'高島平多目的 8:50~11:00',note:'',carpool:false,archived:false},
-    {id:'2026-04-05_1・2年',date:'2026-04-05',grade:'1・2年',venue:'板七小 8:50~10:50',note:'',carpool:false,archived:false},
-    {id:'2026-04-12_1・2・3年',date:'2026-04-12',grade:'1・2・3年',venue:'板七小 8:50~10:50',note:'',carpool:false,archived:false},
-    {id:'2026-04-18_1・2年',date:'2026-04-18',grade:'1・2年',venue:'板七小 10:00~11:45',note:'',carpool:false,archived:false},
-    {id:'2026-04-25_1・2・3年',date:'2026-04-25',grade:'1・2・3年',venue:'高島平多目的 10:30~13:00',note:'',carpool:false,archived:false},
-    {id:'2026-04-26_2・3年',date:'2026-04-26',grade:'2・3年',venue:'大谷口小 17:50~19:15',note:'',carpool:false,archived:false},
-    {id:'2026-04-29_1・2年',date:'2026-04-29',grade:'1・2年',venue:'板二小 10:15~12:15',note:'',carpool:false,archived:false}
-  ];
-  return JSON.parse(localStorage.getItem('fc_schedules') || JSON.stringify(defaults));
+  return JSON.parse(localStorage.getItem('fc_schedules') || '[]');
 }
 function saveSchedules(s) { localStorage.setItem('fc_schedules', JSON.stringify(s)); pushMasterToCloud(); }
 
