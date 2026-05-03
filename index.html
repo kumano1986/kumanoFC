@@ -460,6 +460,12 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       <div id="att-my-family-badge" style="font-size:12px;font-weight:700;color:var(--green);"></div>
       <div id="sync-indicator" style="font-size:10px;color:var(--text-muted);">自動同期: 5秒ごと</div>
     </div>
+    <div style="margin-top:8px;padding:8px 10px;background:#f8f8f8;border-radius:8px;font-size:11px;color:var(--text-muted);line-height:1.8;">
+      <span style="color:#2d7a4f;font-weight:700;">◯</span> 参加　
+      <span style="color:#1a5c30;font-weight:700;">●</span> 参加するが当番不可（親がどうしても参加不可・兄弟が当番日の為など）　
+      <span style="color:#e6a817;font-weight:700;">△</span> 調整中　
+      <span style="color:#c0392b;font-weight:700;">×</span> 不参加
+    </div>
   </div>
   <div id="attendance-list"></div>
 
@@ -1309,7 +1315,7 @@ function renderAttendancePage() {
     var dateObj = new Date(s.date);
     var wd = weekdays[dateObj.getDay()];
     var dateLabel = s.date.replace(/^2026-/,'').replace(/-/,'/') + '(' + wd + ')';
-    var maru = parents.filter(function(p){return att[p]==='◯';}).length;
+    var maru = parents.filter(function(p){return att[p]==='◯'||att[p]==='●';}).length;
 
     var dutyData = getDutyData();
     var assigned = dutyData[s.id] || '';
@@ -1340,10 +1346,12 @@ function renderAttendancePage() {
 
       function bb(val, label) {
         var on = v === val;
-        var bg = on ? (val==='◯'?'#2d7a4f':val==='△'?'#e6a817':'#c0392b') : '#eee';
+        var bg = on ? (val==='◯'?'#2d7a4f':val==='●'?'#1a5c30':val==='△'?'#e6a817':'#c0392b') : '#eee';
         var co = on ? 'white' : '#bbb';
         var extra = pLocked ? 'opacity:0.7;pointer-events:none;' : 'cursor:pointer;';
-        return '<button class="att-btn" data-sid="'+s.id+'" data-parent="'+p+'" data-val="'+val+'" style="'+btnSt+'background:'+bg+';color:'+co+';'+extra+'">'+label+'</button>';
+        // ●は小さく見えるためサイズを調整
+        var fs = val==='●' ? 'font-size:16px;' : '';
+        return '<button class="att-btn" data-sid="'+s.id+'" data-parent="'+p+'" data-val="'+val+'" style="'+btnSt+fs+'background:'+bg+';color:'+co+';'+extra+'">'+label+'</button>';
       }
 
       // 配車プルダウン
@@ -1376,7 +1384,7 @@ function renderAttendancePage() {
         '<div style="padding:7px 0;border-bottom:1px solid #f2f2f2;'+rowBg+'">' +
           '<div style="display:flex;align-items:center;gap:6px;">' +
             '<div style="min-width:48px;font-size:13px;font-weight:600;flex-shrink:0;'+(isMyRow?'color:var(--green);':'color:#bbb;')+'">' + p + '</div>' +
-            '<div style="display:flex;gap:4px;flex-shrink:0;">' + bb('◯','◯') + bb('△','△') + bb('×','×') + '</div>' +
+            '<div style="display:flex;gap:4px;flex-shrink:0;">' + bb('◯','◯') + bb('●','●') + bb('△','△') + bb('×','×') + '</div>' +
             (s.carpool ? '<div style="flex-shrink:0;">' + drvSel + '</div>' : '') +
             '<div style="flex:1;"></div>' +
             '<div style="flex-shrink:0;">' + pLockBtn + '</div>' +
@@ -2035,8 +2043,8 @@ function getDutyCandidates(sid) {
   var nextAtt = nextSched ? (attData[nextSched.id] || {}) : {};
   // 当日◯ かつ 翌日程も◯（翌日程なければ当日◯のみ）
   return getParents().filter(function(p) {
-    if (curAtt[p] !== '◯') return false;
-    if (nextSched && nextAtt[p] !== '◯') return false;
+    if (curAtt[p] !== '◯' && curAtt[p] !== '●') return false;
+    if (nextSched && nextAtt[p] !== '◯' && nextAtt[p] !== '●') return false;
     return true;
   });
 }
