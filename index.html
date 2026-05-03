@@ -1298,8 +1298,22 @@ function startAutoSync() {
     gasReq({action:'getAttendance'}).then(function(cloudData) {
       if (!cloudData || typeof cloudData !== 'object' || cloudData.error) return;
       if (!Object.keys(cloudData).length) return;
+
       var local = JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
       var myFamily = getMyFamily();
+
+      // クラウドデータの中で他の家族の変更があるか確認
+      var hasOtherChange = false;
+      Object.keys(cloudData).forEach(function(sid) {
+        Object.keys(cloudData[sid] || {}).forEach(function(parent) {
+          if (parent === myFamily) return; // 自分は除外
+          var localVal = (local[sid] || {})[parent] || '';
+          var cloudVal = cloudData[sid][parent] || '';
+          if (localVal !== cloudVal) hasOtherChange = true;
+        });
+      });
+
+      // マージ処理（自分の行は常にローカル優先）
       var merged = JSON.parse(JSON.stringify(cloudData));
       Object.keys(local).forEach(function(sid) {
         if (!merged[sid]) merged[sid] = {};
@@ -1311,13 +1325,14 @@ function startAutoSync() {
           }
         });
       });
-      var mergedStr = JSON.stringify(merged);
-      var currentStr = localStorage.getItem('fc_attendance2') || '{}';
-      // データが変わった時だけ保存・再描画
-      if (mergedStr !== currentStr) {
-        localStorage.setItem('fc_attendance2', mergedStr);
+
+      localStorage.setItem('fc_attendance2', JSON.stringify(merged));
+
+      // 他の家族の変更があった時だけ再描画
+      if (hasOtherChange) {
         renderAttendancePage();
       }
+
       var now = new Date();
       var label = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
       var indEl = document.getElementById('sync-indicator');
@@ -2034,7 +2049,7 @@ function renderResultPage() {
   const metaEl = document.getElementById('rs-meta');
   if (metaEl) {
     const d = date ? new Date(date).toLocaleDateString('ja-JP', {year:'numeric',month:'long',day:'numeric'}) : '';
-    metaEl.textContent = [grade, d, author ? author : ''].filter(Boolean).join('　');
+    metaEl.textContent = [d, author ? author : ''].filter(Boolean).join('　');
   }
   const el = document.getElementById('rs-matches');
   if (!el) return;
