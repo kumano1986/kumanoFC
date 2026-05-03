@@ -1306,12 +1306,12 @@ async function pullMasterFromCloud() {
   try {
     var master = await gasReq({action: 'getMaster'});
     if (!master || master.error) return;
-    if (master.schedules  && master.schedules.length)  { localStorage.setItem('fc_schedules',   JSON.stringify(master.schedules));  }
-    if (master.parents    && master.parents.length)    { localStorage.setItem('fc_parents',     JSON.stringify(master.parents));    _parentsCache = null; }
-    if (master.venues     && master.venues.length)     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
-    if (master.matchNames && master.matchNames.length) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
-    if (master.carpool    && Object.keys(master.carpool).length) { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
-    if (master.duty       && Object.keys(master.duty).length)    { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
+    if (Array.isArray(master.schedules))  { localStorage.setItem('fc_schedules',   JSON.stringify(master.schedules));  }
+    if (Array.isArray(master.parents))    { localStorage.setItem('fc_parents',     JSON.stringify(master.parents));    _parentsCache = null; }
+    if (Array.isArray(master.venues))     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
+    if (Array.isArray(master.matchNames)) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
+    if (master.carpool && typeof master.carpool === 'object') { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
+    if (master.duty    && typeof master.duty    === 'object') { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
   } catch(e) {}
 }
 
@@ -1323,26 +1323,28 @@ function startAutoSync() {
     gasReq({action:'getMaster'}).then(function(master) {
       if (!master || master.error) return;
       var masterChanged = false;
-      if (master.schedules  && master.schedules.length) {
+      // schedules：空配列も反映（削除対応）
+      if (Array.isArray(master.schedules)) {
         var cur = localStorage.getItem('fc_schedules') || '[]';
         var nw = JSON.stringify(master.schedules);
         if (cur !== nw) { localStorage.setItem('fc_schedules', nw); masterChanged = true; }
       }
-      if (master.parents && master.parents.length) {
+      // parents：空配列も反映
+      if (Array.isArray(master.parents)) {
         var cur = localStorage.getItem('fc_parents') || '[]';
         var nw = JSON.stringify(master.parents);
         if (cur !== nw) { localStorage.setItem('fc_parents', nw); _parentsCache = null; masterChanged = true; }
       }
-      if (master.venues && master.venues.length) {
+      if (Array.isArray(master.venues)) {
         localStorage.setItem('fc_venues', JSON.stringify(master.venues));
       }
-      if (master.matchNames && master.matchNames.length) {
+      if (Array.isArray(master.matchNames)) {
         localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames));
       }
-      if (master.carpool && Object.keys(master.carpool).length) {
+      if (master.carpool && typeof master.carpool === 'object') {
         localStorage.setItem('fc_carpool', JSON.stringify(master.carpool));
       }
-      if (master.duty && Object.keys(master.duty).length) {
+      if (master.duty && typeof master.duty === 'object') {
         localStorage.setItem('fc_duty', JSON.stringify(master.duty));
       }
       if (masterChanged) renderAttendancePage();
