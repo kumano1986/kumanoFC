@@ -367,6 +367,15 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
         <div id="family-list" style="margin-top:10px;"><div class="empty-state">読み込み中...</div></div>
         <div style="font-size:12px;color:var(--text-muted);text-align:right;margin-top:6px;" id="family-count"></div>
       </div>
+      <!-- 試合名マスタ -->
+      <div class="card">
+        <div class="card-title">📋 試合名を登録</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">試合カードの試合名プルダウンに表示されます</div>
+        <label>試合名</label>
+        <input type="text" id="input-match-name" placeholder="例: 練習試合・板橋区リーグ">
+        <button class="btn btn-primary btn-full" onclick="addMatchName()">＋ 試合名を追加</button>
+        <div id="match-name-list" style="margin-top:10px;"><div class="empty-state">まだ登録されていません</div></div>
+      </div>
       <!-- Google連携 -->
       <div class="card">
         <div class="card-title">Google連携設定</div>
@@ -414,6 +423,17 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
 
 <!-- ===== 試合記録 ===== -->
 <div id="page-report" class="page active">
+
+  <!-- 得点者選択モーダル -->
+  <div id="modal-scorer-select" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:flex-end;">
+    <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-height:70vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div id="scorer-modal-title" style="font-size:17px;font-weight:700;color:var(--green);"></div>
+        <button onclick="document.getElementById('modal-scorer-select').style.display='none'" style="background:none;border:none;font-size:20px;color:#aaa;cursor:pointer;">✕</button>
+      </div>
+      <div id="scorer-player-list"></div>
+    </div>
+  </div>
   <div class="card">
     <div class="card-title">基本情報</div>
     <label>日時</label>
@@ -686,9 +706,49 @@ function renderFamilies() {
   document.getElementById('family-count').textContent = '計 ' + arr.length + ' 家族';
 }
 
-// ===== 自分の家族 =====
+// ===== 試合名マスタ =====
+function getMatchNames() {
+  var defaults = ['練習試合', '公式戦', 'リーグ戦', 'カップ戦', 'フレンドリーマッチ'];
+  return JSON.parse(localStorage.getItem('fc_match_names') || JSON.stringify(defaults));
+}
+function saveMatchNames(arr) { localStorage.setItem('fc_match_names', JSON.stringify(arr)); }
+
+function addMatchName() {
+  var name = document.getElementById('input-match-name').value.trim();
+  if (!name) { showToast('試合名を入力してください'); return; }
+  var arr = getMatchNames();
+  if (arr.includes(name)) { showToast('すでに登録されています'); return; }
+  arr.push(name);
+  saveMatchNames(arr);
+  document.getElementById('input-match-name').value = '';
+  renderMatchNames();
+  showToast(name + ' を登録しました ✅');
+}
+
+function removeMatchName(name) {
+  var arr = getMatchNames().filter(function(n){return n!==name;});
+  saveMatchNames(arr);
+  renderMatchNames();
+}
+
+function renderMatchNames() {
+  var el = document.getElementById('match-name-list');
+  if (!el) return;
+  var arr = getMatchNames();
+  if (!arr.length) { el.innerHTML = '<div class="empty-state">まだ登録されていません</div>'; return; }
+  el.innerHTML = '<div class="player-chips">' +
+    arr.map(function(name) {
+      return '<div class="player-chip"><span>' + name + '</span>' +
+        '<button onclick="removeMatchName(\'' + name + '\')">✕</button></div>';
+    }).join('') + '</div>';
+}
 function getMyFamily() {
   return localStorage.getItem('fc_my_family') || '';
+}
+
+function isAdmin() {
+  var name = getMyFamily();
+  return name.indexOf('★') >= 0;
 }
 function setMyFamily(name) {
   localStorage.setItem('fc_my_family', name);
@@ -1065,7 +1125,8 @@ function addSchedule() {
   // 同じIDがあれば連番で回避
   var n = 2;
   while (scheds.find(function(s){return s.id===id;})) { id = date+'_'+grade+'_'+n; n++; }
-  scheds.push({id:id, date:date, grade:grade, venue:venue, note:note, carpool:carpool, archived:false});
+  scheds.push({id:id, date:date, grade:grade, venue:venue, note:note, carpool:carpool, archived:false, locked:false});
+  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
   saveSchedules(scheds);
   closeModal('modal-add-schedule');
   renderAttendancePage();
@@ -1219,6 +1280,7 @@ function openSettings() {
   }
   renderPlayers();
   renderFamilies();
+  renderMatchNames();
 }
 
 function closeModal(id) {
@@ -1322,14 +1384,14 @@ function renderAttendancePage() {
     var lockBadge = locked ? '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:#fdecea;color:#c0392b;">🔒 締切済</span>' : '';
 
     var btnSt = 'border:none;border-radius:6px;font-size:12px;font-weight:700;padding:4px 7px;min-width:30px;transition:background 0.1s;';
-    var selSt = 'font-size:12px;padding:4px 5px;border:1.5px solid #ddd;border-radius:6px;background:#fff;margin:0;max-width:72px;';
+    var selSt = 'font-size:12px;padding:4px 5px;border:1.5px solid #ddd;border-radius:6px;background:#fff;margin:0;width:72px;';
 
     // カラムヘッダー
     var headerRow =
       '<div style="display:flex;align-items:center;gap:6px;padding:4px 0 6px;border-bottom:2px solid var(--card-border);">' +
         '<div style="min-width:48px;flex-shrink:0;"></div>' +
-        '<div style="flex-shrink:0;font-size:10px;font-weight:700;color:var(--text-muted);min-width:98px;text-align:center;">出欠確認</div>' +
-        (s.carpool ? '<div style="flex-shrink:0;font-size:10px;font-weight:700;color:var(--text-muted);">配車可否</div>' : '') +
+        '<div style="flex-shrink:0;font-size:10px;font-weight:700;color:var(--text-muted);width:128px;text-align:center;">出欠確認</div>' +
+        (s.carpool ? '<div style="flex-shrink:0;font-size:10px;font-weight:700;color:var(--text-muted);width:72px;text-align:left;">配車</div>' : '') +
       '</div>';
 
     var rows = '';
@@ -1339,6 +1401,7 @@ function renderAttendancePage() {
       var drv = cpP.drive || '';
       var pl  = cpP.players || '';
       var cm  = cpP.companions || '';
+      var cap = cpP.capacity || ''; // 乗車可能人数（可能の場合）
 
       // 自分の家族かどうか
       var isMyRow = !myFamily || p === myFamily;
@@ -1349,29 +1412,38 @@ function renderAttendancePage() {
         var bg = on ? (val==='◯'?'#2d7a4f':val==='●'?'#1a5c30':val==='△'?'#e6a817':'#c0392b') : '#eee';
         var co = on ? 'white' : '#bbb';
         var extra = pLocked ? 'opacity:0.7;pointer-events:none;' : 'cursor:pointer;';
-        // ●は小さく見えるためサイズを調整
         var fs = val==='●' ? 'font-size:16px;' : '';
         return '<button class="att-btn" data-sid="'+s.id+'" data-parent="'+p+'" data-val="'+val+'" style="'+btnSt+fs+'background:'+bg+';color:'+co+';'+extra+'">'+label+'</button>';
       }
 
-      // 配車プルダウン
+      // 配車プルダウン（可能／希望／不要）
       var drvSel = s.carpool
         ? '<select class="cp-drive-sel" data-sid="'+s.id+'" data-parent="'+p+'" style="'+selSt+'"'+(pLocked?' disabled':'')+'>'+
             '<option value="">-</option>'+
-            '<option value="ok"'+(drv==='ok'?' selected':'')+'>🚗可</option>'+
-            '<option value="ng"'+(drv==='ng'?' selected':'')+'>🚗不可</option>'+
+            '<option value="ok"'+(drv==='ok'?' selected':'')+'>可能</option>'+
+            '<option value="ng"'+(drv==='ng'?' selected':'')+'>希望</option>'+
+            '<option value="no"'+(drv==='no'?' selected':'')+'>不要</option>'+
           '</select>'
         : '';
 
       function numSel(field, curVal) {
         var opts = '<option value="">-</option>';
-        for (var i=1;i<=4;i++) opts += '<option value="'+i+'"'+(String(curVal)===String(i)?' selected':'')+'>'+i+'</option>';
+        for (var i=1;i<=9;i++) opts += '<option value="'+i+'"'+(String(curVal)===String(i)?' selected':'')+'>'+i+'</option>';
         return '<select class="cp-num" data-sid="'+s.id+'" data-parent="'+p+'" data-field="'+field+'" style="'+selSt+';max-width:52px;"'+(pLocked?' disabled':'')+'>'+opts+'</select>';
       }
-      var carpoolInputs = (s.carpool && drv==='ng')
-        ? '<span style="font-size:10px;color:#888;white-space:nowrap;">配車希望選手人数</span>'+numSel('players',pl)+
-          '<span style="font-size:10px;color:#888;margin-left:4px;white-space:nowrap;">同伴希望者人数</span>'+numSel('companions',cm)
-        : '';
+
+      // 選択値によって表示内容を変える
+      var carpoolInputs = '';
+      if (s.carpool && drv==='ok') {
+        // 可能→乗車可能人数
+        carpoolInputs =
+          '<span style="font-size:10px;color:#888;white-space:nowrap;margin-left:4px;">乗車可能人数</span>' + numSel('capacity', cap);
+      } else if (s.carpool && drv==='ng') {
+        // 希望→選手人数・同伴者数
+        carpoolInputs =
+          '<span style="font-size:10px;color:#888;white-space:nowrap;margin-left:4px;">選手</span>' + numSel('players', pl) +
+          '<span style="font-size:10px;color:#888;white-space:nowrap;margin-left:4px;">同伴</span>' + numSel('companions', cm);
+      }
 
       // 入力済ボタン（自分の行のみ）
       var pLockBtn = (!locked && isMyRow)
@@ -1409,11 +1481,9 @@ function renderAttendancePage() {
           '</div>' +
           '<div style="display:flex;align-items:center;gap:6px;">' +
             '<div style="font-size:13px;font-weight:700;color:var(--green);white-space:nowrap;">◯ ' + maru + '名</div>' +
-            '<button class="edit-sched-btn" data-sid="'+s.id+'" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;font-size:13px;cursor:pointer;padding:2px 7px;">✏️</button>' +
-            '<button class="move-sched-btn" data-sid="'+s.id+'" data-dir="up" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;font-size:12px;cursor:pointer;padding:2px 6px;">↑</button>' +
-            '<button class="move-sched-btn" data-sid="'+s.id+'" data-dir="down" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;font-size:12px;cursor:pointer;padding:2px 6px;">↓</button>' +
-            (!locked ? '<button class="carpool-toggle-btn" data-sid="'+s.id+'" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;border:none;cursor:pointer;'+(s.carpool?'background:#fff3cd;color:#b7950b;':'background:#f0f0f0;color:#aaa;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</button>' : '') +
-            '<button class="del-sched-btn" data-sid="'+s.id+'" style="background:none;border:none;color:#ccc;font-size:16px;cursor:pointer;padding:0;">🗑</button>' +
+            (isAdmin() ? '<button class="edit-sched-btn" data-sid="'+s.id+'" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;font-size:13px;cursor:pointer;padding:2px 7px;">✏️</button>' : '') +
+            (isAdmin() && !locked ? '<button class="carpool-toggle-btn" data-sid="'+s.id+'" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;border:none;cursor:pointer;'+(s.carpool?'background:#fff3cd;color:#b7950b;':'background:#f0f0f0;color:#aaa;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</button>' : '') +
+            (isAdmin() ? '<button class="del-sched-btn" data-sid="'+s.id+'" style="background:none;border:none;color:#ccc;font-size:16px;cursor:pointer;padding:0;">🗑</button>' : '') +
           '</div>' +
         '</div>' +
         '<div>' + headerRow + rows + '</div>' +
@@ -1792,18 +1862,43 @@ function resBadge(id, m) {
 }
 
 // 得点者追加 → スコア自動+1
+// 得点者選択モーダル用の一時変数
+var _scorerMid = null;
+var _scorerPeriod = null;
+
 async function addScorer(mid, period) {
   const m = matches.find(m=>m.id===mid);
   if (!m) return;
   if (!players.length) { showToast('先に選手を登録してください'); return; }
-  m.scorers.push({id: Date.now(), period, playerId: players[0]?.id||null});
-  // 得点カウント自動加算
+  // 選手選択モーダルを表示
+  _scorerMid = mid;
+  _scorerPeriod = period;
+  const periodLabel = period==='h1'?'前半':period==='h2'?'後半':'PK';
+  const modal = document.getElementById('modal-scorer-select');
+  document.getElementById('scorer-modal-title').textContent = '⚽ 得点者を選択（'+periodLabel+'）';
+  const list = document.getElementById('scorer-player-list');
+  list.innerHTML = players.map(p =>
+    '<button class="scorer-player-btn" data-pid="'+p.id+'" style="width:100%;padding:14px;margin-bottom:8px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;border:2px solid var(--card-border);background:white;color:var(--text);text-align:left;">'+p.name+'</button>'
+  ).join('');
+  modal.style.display = 'flex';
+}
+
+async function confirmScorer(playerId) {
+  const mid = _scorerMid;
+  const period = _scorerPeriod;
+  if (!mid || !period) return;
+  const m = matches.find(m=>m.id===mid);
+  if (!m) return;
+  m.scorers.push({id: Date.now(), period, playerId: parseInt(playerId)});
   if (period === 'h1') m.scores.h1_k = (m.scores.h1_k||0) + 1;
   else if (period === 'h2') m.scores.h2_k = (m.scores.h2_k||0) + 1;
   else if (period === 'pk') m.scores.pk_k = (m.scores.pk_k||0) + 1;
   await saveMatches();
   refreshMatchUI(mid, m);
   renderScorerList(mid);
+  document.getElementById('modal-scorer-select').style.display = 'none';
+  _scorerMid = null;
+  _scorerPeriod = null;
 }
 async function updateScorer(mid, sid, pid) {
   const m = matches.find(m=>m.id===mid); if(!m) return;
@@ -1851,7 +1946,7 @@ function renderAllMatches() {
       <div class="match-body">
         <div class="form-row" style="margin-bottom:4px;">
           <div><label>相手チーム</label><input type="text" value="${m.opponent}" placeholder="チーム名" oninput="updateField(${m.id},'opponent',this.value)"></div>
-          <div><label>試合名</label><input type="text" value="${m.venue}" placeholder="試合名" oninput="updateField(${m.id},'venue',this.value)"></div>
+          <div><label>試合名</label><select onchange="updateField(${m.id},'venue',this.value)" style="margin:0;">${(()=>{const names=getMatchNames();const opts=['<option value="">選択してください</option>',...names.map(n=>`<option value="${n}" ${n===m.venue?'selected':''}>${n}</option>`)];if(m.venue&&!names.includes(m.venue))opts.push(`<option value="${m.venue}" selected>${m.venue}</option>`);return opts.join('');})()}</select></div>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 0 6px;border:1px solid var(--card-border);border-radius:10px;background:var(--input-bg);margin-bottom:10px;">
@@ -1873,7 +1968,6 @@ function renderAllMatches() {
         <div class="form-row" style="margin-top:6px;">
           <button class="btn btn-outline btn-sm" onclick="addScorer(${m.id},'h1')">＋前半</button>
           <button class="btn btn-outline btn-sm" onclick="addScorer(${m.id},'h2')">＋後半</button>
-          <button class="btn btn-outline btn-sm" onclick="addScorer(${m.id},'pk')">＋PK</button>
         </div>
 
         <div class="slabel" style="margin-top:12px;">🔴 失点カウント</div>
@@ -2170,6 +2264,8 @@ function renderDutyPage() {
 document.addEventListener('click', function(e) {
   var btn = e.target.closest('.att-btn');
   if (btn) { setAttendance(btn.dataset.sid, btn.dataset.parent, btn.dataset.val); return; }
+  var sp = e.target.closest('.scorer-player-btn');
+  if (sp) { confirmScorer(sp.dataset.pid); return; }
   var cb = e.target.closest('.confirm-btn');
   if (cb) { confirmSchedule(cb.dataset.sid); return; }
   var db = e.target.closest('.del-sched-btn');
