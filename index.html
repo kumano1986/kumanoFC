@@ -1356,8 +1356,8 @@ function startAutoSync() {
       if (master.duty && typeof master.duty === 'object') {
         localStorage.setItem('fc_duty', JSON.stringify(master.duty));
       }
-      if (masterChanged && document.getElementById('page-attendance') &&
-          document.getElementById('page-attendance').classList.contains('active')) {
+      if (masterChanged) {
+        _parentsCache = null;
         renderAttendancePage();
       }
     }).catch(function(){});
@@ -1400,11 +1400,7 @@ function startAutoSync() {
       });
 
       localStorage.setItem('fc_attendance2', JSON.stringify(merged));
-      // 出欠確認タブが開いていたら再描画
-      var attPage = document.getElementById('page-attendance');
-      if (attPage && attPage.classList.contains('active')) {
-        renderAttendancePage();
-      }
+      renderAttendancePage();
       var now = new Date();
       var label = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
       var indEl = document.getElementById('sync-indicator');
