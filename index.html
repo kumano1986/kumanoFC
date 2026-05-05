@@ -1619,11 +1619,12 @@ window.onload = async () => {
   // 選手は常にローカルから先に読み込む（永続保存）
   players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
   renderPlayers();
-  await syncAll();
+  try { await syncAll(); } catch(e) {}
   // 初回訪問チェック
   setTimeout(checkFirstVisit, 500);
-  // 常に自動同期を開始
+  // 常に自動同期を開始（syncAllが失敗しても必ず開始）
   startAutoSync();
+  showToast('アプリ起動完了');
 };
 
 // ===== ユーティリティ =====
