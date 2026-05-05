@@ -1599,8 +1599,9 @@ function renderAttendancePage() {
 // ===== 状態 =====
 let players = [], matches = [], matchCounter = 0;
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwKOeBxmLG5agYpHwZFsItT_iCwMuAoW_S8SDm5N1-sLDRPskZ4naxbqQXhu-oxwyOlRA/exec';
-let gasUrl = localStorage.getItem('fc_gas_url') || DEFAULT_GAS_URL;
-if (!gasUrl) gasUrl = DEFAULT_GAS_URL;
+// 常にデフォルトURLで上書き（古いURLや空のURLを防ぐ）
+localStorage.setItem('fc_gas_url', DEFAULT_GAS_URL);
+let gasUrl = DEFAULT_GAS_URL;
 let reportMeta = JSON.parse(localStorage.getItem('fc_report_meta') || '{"date":"","author":"","grade":"2年生"}');
 let summaryData = [];
 let selectedNendo = null;
