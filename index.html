@@ -1330,7 +1330,10 @@ function startAutoSync() {
     if (typeof gasUrl === 'undefined' || !gasUrl) return;
     // マスタデータも同期
     gasReq({action:'getMaster'}).then(function(master) {
-      if (!master || master.error) return;
+      if (!master || master.error) {
+        showToast('⚠️ マスタ取得失敗');
+        return;
+      }
       var masterChanged = false;
       // schedules：空配列も反映（削除対応）
       if (Array.isArray(master.schedules)) {
@@ -1356,11 +1359,12 @@ function startAutoSync() {
       if (master.duty && typeof master.duty === 'object') {
         localStorage.setItem('fc_duty', JSON.stringify(master.duty));
       }
+      showToast('マスタ取得OK 日程:' + (master.schedules||[]).length + '件');
       if (masterChanged) {
         _parentsCache = null;
         renderAttendancePage();
       }
-    }).catch(function(){});
+    }).catch(function(e){ showToast('マスタエラー:' + e); });
 
     // 出欠データ同期
     gasReq({action:'getAttendance'}).then(function(cloudData) {
