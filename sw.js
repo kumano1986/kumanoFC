@@ -1,27 +1,12 @@
-// v2 - キャッシュ完全無効化
-const CACHE_VERSION = 'fc-kumano-v2';
-
-self.addEventListener('install', function(e) {
-  self.skipWaiting();
-});
-
+// ServiceWorker無効化
+self.addEventListener('install', function() { self.skipWaiting(); });
 self.addEventListener('activate', function(e) {
   e.waitUntil(
     caches.keys().then(function(keys) {
-      return Promise.all(keys.map(function(key) {
-        return caches.delete(key);
-      }));
-    }).then(function() {
-      return self.clients.claim();
-    })
+      return Promise.all(keys.map(function(k){ return caches.delete(k); }));
+    }).then(function(){ return self.clients.claim(); })
   );
 });
-
 self.addEventListener('fetch', function(e) {
-  // キャッシュを使わず常にネットワークから取得
-  e.respondWith(
-    fetch(e.request, { cache: 'no-store' }).catch(function() {
-      return caches.match(e.request);
-    })
-  );
+  e.respondWith(fetch(e.request));
 });

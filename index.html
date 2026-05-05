@@ -1622,8 +1622,14 @@ function getNendo(date) {
 selectedNendo = getNendo();
 
 // ===== PWA =====
+// 古いServiceWorkerを全て解除してキャッシュをクリア
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  navigator.serviceWorker.getRegistrations().then(function(regs) {
+    regs.forEach(function(reg) { reg.unregister(); });
+  });
+  caches.keys().then(function(keys) {
+    keys.forEach(function(k) { caches.delete(k); });
+  });
 }
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault(); deferredPrompt = e;
