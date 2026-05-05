@@ -1728,12 +1728,18 @@ async function syncAll() {
     await pullMasterFromCloud();
     setConnected(true);
     renderPlayers(); renderAllMatches();
+    // 出欠確認タブも更新
+    renderAttendancePage();
   } catch(e) {
+    console.error('syncAll error:', e);
     document.getElementById('sync-status').textContent = '同期失敗';
+    // エラー時もマスタを取得しようとする
+    try { await pullMasterFromCloud(); } catch(e2) {}
     players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
     matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
     matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
     renderPlayers(); renderAllMatches();
+    renderAttendancePage();
   }
 }
 async function savePlayers() {
