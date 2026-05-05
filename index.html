@@ -1353,18 +1353,25 @@ function startAutoSync() {
     // 出欠データ同期
     gasReq({action:'getAttendance'}).then(function(cloudData) {
       if (!cloudData || typeof cloudData !== 'object' || cloudData.error) return;
-      if (!Object.keys(cloudData).length) return;
       var local = JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
       var myFamily = getMyFamily();
-      var hasOtherChange = false;
+
+      // クラウドデータで他家族に変更があるか検知
+      var hasChange = false;
       Object.keys(cloudData).forEach(function(sid) {
         Object.keys(cloudData[sid] || {}).forEach(function(parent) {
           if (parent === myFamily) return;
           var localVal = (local[sid] || {})[parent] || '';
           var cloudVal = cloudData[sid][parent] || '';
-          if (localVal !== cloudVal) hasOtherChange = true;
+          if (localVal !== cloudVal) hasChange = true;
         });
       });
+      // クラウドにあってローカルにない日程も検知
+      Object.keys(local).forEach(function(sid) {
+        if (!cloudData[sid]) hasChange = true;
+      });
+
+      // マージ（自分の行はローカル優先）
       var merged = JSON.parse(JSON.stringify(cloudData));
       Object.keys(local).forEach(function(sid) {
         if (!merged[sid]) merged[sid] = {};
@@ -1376,8 +1383,10 @@ function startAutoSync() {
           }
         });
       });
+
       localStorage.setItem('fc_attendance2', JSON.stringify(merged));
-      if (hasOtherChange) renderAttendancePage();
+      if (hasChange) renderAttendancePage();
+
       var now = new Date();
       var label = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
       var indEl = document.getElementById('sync-indicator');
