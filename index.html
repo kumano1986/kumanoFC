@@ -311,7 +311,7 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       </svg>
       Googleドライブ
     </a>
-    <button class="btn-sync" onclick="syncAll()" style="line-height:1;">🔄</button>
+    <button class="btn-sync" onclick="syncAll()" style="line-height:1;min-width:44px;min-height:44px;font-size:20px;">🔄</button>
     <button onclick="openSettings()" style="background:rgba(255,255,255,0.18);color:white;border:1px solid rgba(255,255,255,0.3);padding:5px 10px;border-radius:8px;font-size:16px;cursor:pointer;line-height:1;">⚙️</button>
   </div>
 </header>
@@ -1689,12 +1689,18 @@ function setConnected(ok) {
   document.getElementById('sync-status').textContent = ok ? '接続済み ✓' : '未接続';
 }
 async function syncAll() {
-  if (!gasUrl) return;
+  if (!gasUrl) { showToast('❌ GAS未接続'); return; }
+  showToast('🔄 同期中...');
   document.getElementById('sync-status').textContent = '同期中...';
-  // マスタデータを独立して取得（他の処理が失敗しても実行）
-  pullMasterFromCloud().then(function() {
+  // マスタデータを独立して取得
+  try {
+    await pullMasterFromCloud();
+    _parentsCache = null;
     renderAttendancePage();
-  }).catch(function(){});
+    showToast('✅ 同期完了');
+  } catch(e) {
+    showToast('❌ マスタ取得失敗');
+  }
   try {
     const [p, m] = await Promise.all([
       gasReq({action:'getPlayers'}),
