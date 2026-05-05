@@ -1385,7 +1385,8 @@ function startAutoSync() {
       });
 
       localStorage.setItem('fc_attendance2', JSON.stringify(merged));
-      if (hasChange) renderAttendancePage();
+      // 常に再描画（変更検知に関わらず）
+      renderAttendancePage();
 
       var now = new Date();
       var label = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
