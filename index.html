@@ -1355,7 +1355,10 @@ function startAutoSync() {
 
     // 出欠データ同期
     gasReq({action:'getAttendance'}).then(function(cloudData) {
-      if (!cloudData || typeof cloudData !== 'object' || cloudData.error) return;
+      if (!cloudData || typeof cloudData !== 'object' || cloudData.error) {
+        showToast('⚠️ 出欠同期失敗');
+        return;
+      }
       var local = JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
       var myFamily = getMyFamily();
 
@@ -1388,16 +1391,16 @@ function startAutoSync() {
       });
 
       localStorage.setItem('fc_attendance2', JSON.stringify(merged));
-      // 出欠確認タブが表示中の時だけ再描画
-      if (document.getElementById('page-attendance') && 
-          document.getElementById('page-attendance').classList.contains('active')) {
+      // 出欠確認タブが開いていたら再描画
+      var attPage = document.getElementById('page-attendance');
+      if (attPage && attPage.classList.contains('active')) {
         renderAttendancePage();
       }
-
       var now = new Date();
       var label = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
       var indEl = document.getElementById('sync-indicator');
-      if (indEl) indEl.textContent = '🔄 ' + label + ' 同期済';
+      var keys = Object.keys(cloudData).length;
+      if (indEl) indEl.textContent = '🔄 ' + label + ' (' + keys + '件)';
     }).catch(function(){});
   }, 5000);
 }
@@ -1430,7 +1433,6 @@ async function loadAttendanceFromCloud() {
 }
 
 function renderAttendancePage() {
-  loadAttendanceFromCloud();
   var myFamily = getMyFamily();
   // 自分の家族バッジを更新
   var badge = document.getElementById('att-my-family-badge');
