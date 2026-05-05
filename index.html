@@ -1664,10 +1664,18 @@ function saveGasUrl() {
 }
 async function gasReq(params) {
   if (!gasUrl) throw new Error('URL未設定');
-  const url = gasUrl + '?' + new URLSearchParams(params);
-  const res = await fetch(url, { cache: 'no-store' });
-  const data = await res.json();
-  return data;
+  if (params.data) {
+    // データがある場合はPOSTで送信
+    const formData = new FormData();
+    Object.keys(params).forEach(function(k) { formData.append(k, params[k]); });
+    const res = await fetch(gasUrl, { method: 'POST', body: formData, cache: 'no-store' });
+    return await res.json();
+  } else {
+    // データなしはGET
+    const url = gasUrl + '?' + new URLSearchParams(params);
+    const res = await fetch(url, { cache: 'no-store' });
+    return await res.json();
+  }
 }
 async function testConnection() {
   if (!gasUrl) { showToast('URLを入力してください'); return; }
