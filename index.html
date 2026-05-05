@@ -1598,7 +1598,9 @@ function renderAttendancePage() {
 
 // ===== 状態 =====
 let players = [], matches = [], matchCounter = 0;
-let gasUrl = localStorage.getItem('fc_gas_url') || 'https://script.google.com/macros/s/AKfycbwKOeBxmLG5agYpHwZFsItT_iCwMuAoW_S8SDm5N1-sLDRPskZ4naxbqQXhu-oxwyOlRA/exec';
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwKOeBxmLG5agYpHwZFsItT_iCwMuAoW_S8SDm5N1-sLDRPskZ4naxbqQXhu-oxwyOlRA/exec';
+let gasUrl = localStorage.getItem('fc_gas_url') || DEFAULT_GAS_URL;
+if (!gasUrl) gasUrl = DEFAULT_GAS_URL;
 let reportMeta = JSON.parse(localStorage.getItem('fc_report_meta') || '{"date":"","author":"","grade":"2年生"}');
 let summaryData = [];
 let selectedNendo = null;
@@ -1629,20 +1631,17 @@ function installApp() {
 window.onload = async () => {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('report-date').value = reportMeta.date || today;
+  // GAS URLを確実にセット
+  if (!gasUrl) gasUrl = DEFAULT_GAS_URL;
+  localStorage.setItem('fc_gas_url', gasUrl);
+  document.getElementById('gas-url').value = gasUrl;
   // 選手は常にローカルから先に読み込む（永続保存）
   players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
   renderPlayers();
-  if (gasUrl) {
-    document.getElementById('gas-url').value = gasUrl || 'https://script.google.com/macros/s/AKfycbwKOeBxmLG5agYpHwZFsItT_iCwMuAoW_S8SDm5N1-sLDRPskZ4naxbqQXhu-oxwyOlRA/exec';
-    await syncAll();
-  } else {
-    matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
-    matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
-    renderAllMatches();
-  }
-  // 初回訪問チェック（少し遅らせてUIが整ってから）
+  await syncAll();
+  // 初回訪問チェック
   setTimeout(checkFirstVisit, 500);
-  // どのタブにいても常に自動同期を開始
+  // 常に自動同期を開始
   startAutoSync();
 };
 
