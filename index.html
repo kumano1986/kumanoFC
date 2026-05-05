@@ -1264,14 +1264,23 @@ function importFromExcel() {
 function openSettings() {
   document.getElementById('modal-settings').style.display = 'flex';
   updateMyFamilyDisplay();
-  // 未設定時はカードを黄色枠で強調
   var card = document.getElementById('my-family-card');
   if (card) {
     card.style.border = getMyFamily() ? '2px solid var(--green)' : '2px solid #e6a817';
   }
-  renderPlayers();
-  renderFamilies();
-  renderMatchNames();
+  // GASからマスタを取得してから描画
+  if (gasUrl) {
+    pullMasterFromCloud().then(function() {
+      renderPlayers();
+      renderFamilies();
+      renderMatchNames();
+      updateMyFamilyDisplay();
+    });
+  } else {
+    renderPlayers();
+    renderFamilies();
+    renderMatchNames();
+  }
 }
 
 function closeModal(id) {
