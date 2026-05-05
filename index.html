@@ -1327,7 +1327,8 @@ async function pullMasterFromCloud() {
 function startAutoSync() {
   stopAutoSync();
   _autoSyncTimer = setInterval(function() {
-    if (typeof gasUrl === 'undefined' || !gasUrl) return;
+    showToast('⏱ 同期中...');
+    if (typeof gasUrl === 'undefined' || !gasUrl) { showToast('❌ gasUrl未設定'); return; }
     // マスタデータも同期
     gasReq({action:'getMaster'}).then(function(master) {
       if (!master || master.error) {
@@ -1652,6 +1653,7 @@ window.onload = async () => {
   // 初回訪問チェック
   setTimeout(checkFirstVisit, 500);
   // 常に自動同期を開始
+  showToast('🔄 自動同期を開始します');
   startAutoSync();
 };
 
