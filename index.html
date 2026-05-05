@@ -1327,13 +1327,11 @@ async function pullMasterFromCloud() {
 function startAutoSync() {
   stopAutoSync();
   _autoSyncTimer = setInterval(function() {
-    showToast('⏱ 同期中...');
-    if (typeof gasUrl === 'undefined' || !gasUrl) { showToast('❌ gasUrl未設定'); return; }
+    if (typeof gasUrl === 'undefined' || !gasUrl) return;
     // マスタデータも同期
     gasReq({action:'getMaster'}).then(function(master) {
       if (!master || master.error) {
-        showToast('⚠️ マスタ取得失敗');
-        return;
+return;
       }
       var masterChanged = false;
       // schedules：空配列も反映（削除対応）
@@ -1360,12 +1358,11 @@ function startAutoSync() {
       if (master.duty && typeof master.duty === 'object') {
         localStorage.setItem('fc_duty', JSON.stringify(master.duty));
       }
-      showToast('マスタ取得OK 日程:' + (master.schedules||[]).length + '件');
       if (masterChanged) {
         _parentsCache = null;
         renderAttendancePage();
       }
-    }).catch(function(e){ showToast('マスタエラー:' + e); });
+    }).catch(function(){});
 
     // 出欠データ同期
     gasReq({action:'getAttendance'}).then(function(cloudData) {
@@ -1653,7 +1650,6 @@ window.onload = async () => {
   // 初回訪問チェック
   setTimeout(checkFirstVisit, 500);
   // 常に自動同期を開始
-  showToast('🔄 自動同期を開始します');
   startAutoSync();
 };
 
