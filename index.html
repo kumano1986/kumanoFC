@@ -1330,90 +1330,54 @@ async function pullMasterFromCloud() {
 function startAutoSync() {
   stopAutoSync();
   _autoSyncTimer = setInterval(function() {
-    if (typeof gasUrl === 'undefined' || !gasUrl) return;
-    // マスタデータも同期
+    if (!gasUrl) return;
+    // マスタデータ同期
     gasReq({action:'getMaster'}).then(function(master) {
-      if (!master || master.error) {
-return;
-      }
+      if (!master || master.error) return;
       var masterChanged = false;
-      // schedules：空配列も反映（削除対応）
       if (Array.isArray(master.schedules)) {
         var cur = localStorage.getItem('fc_schedules') || '[]';
         var nw = JSON.stringify(master.schedules);
         if (cur !== nw) { localStorage.setItem('fc_schedules', nw); masterChanged = true; }
       }
-      // parents：空配列も反映
       if (Array.isArray(master.parents)) {
         var cur = localStorage.getItem('fc_parents') || '[]';
         var nw = JSON.stringify(master.parents);
         if (cur !== nw) { localStorage.setItem('fc_parents', nw); _parentsCache = null; masterChanged = true; }
       }
-      if (Array.isArray(master.venues)) {
-        localStorage.setItem('fc_venues', JSON.stringify(master.venues));
-      }
-      if (Array.isArray(master.matchNames)) {
-        localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames));
-      }
-      if (master.carpool && typeof master.carpool === 'object') {
-        localStorage.setItem('fc_carpool', JSON.stringify(master.carpool));
-      }
-      if (master.duty && typeof master.duty === 'object') {
-        localStorage.setItem('fc_duty', JSON.stringify(master.duty));
-      }
-      if (masterChanged) {
-        _parentsCache = null;
-        renderAttendancePage();
-      }
+      if (Array.isArray(master.venues))     localStorage.setItem('fc_venues',      JSON.stringify(master.venues));
+      if (Array.isArray(master.matchNames)) localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames));
+      if (master.carpool && typeof master.carpool==='object') localStorage.setItem('fc_carpool', JSON.stringify(master.carpool));
+      if (master.duty    && typeof master.duty   ==='object') localStorage.setItem('fc_duty',    JSON.stringify(master.duty));
+      if (masterChanged) { _parentsCache = null; renderAttendancePage(); }
     }).catch(function(){});
-
     // 出欠データ同期
     gasReq({action:'getAttendance'}).then(function(cloudData) {
-      if (!cloudData || typeof cloudData !== 'object' || cloudData.error) {
-        showToast('⚠️ 出欠同期失敗');
-        return;
-      }
+      if (!cloudData || typeof cloudData!=='object' || cloudData.error) return;
       var local = JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
       var myFamily = getMyFamily();
-
-      // クラウドデータで他家族に変更があるか検知
-      var hasChange = false;
-      Object.keys(cloudData).forEach(function(sid) {
-        Object.keys(cloudData[sid] || {}).forEach(function(parent) {
-          if (parent === myFamily) return;
-          var localVal = (local[sid] || {})[parent] || '';
-          var cloudVal = cloudData[sid][parent] || '';
-          if (localVal !== cloudVal) hasChange = true;
-        });
-      });
-      // クラウドにあってローカルにない日程も検知
-      Object.keys(local).forEach(function(sid) {
-        if (!cloudData[sid]) hasChange = true;
-      });
-
-      // マージ（自分の行はローカル優先）
       var merged = JSON.parse(JSON.stringify(cloudData));
       Object.keys(local).forEach(function(sid) {
         if (!merged[sid]) merged[sid] = {};
         Object.keys(local[sid]).forEach(function(parent) {
-          if (parent === myFamily) {
-            merged[sid][parent] = local[sid][parent];
-          } else if (local[sid][parent]) {
-            merged[sid][parent] = local[sid][parent];
-          }
+          if (parent === myFamily) merged[sid][parent] = local[sid][parent];
+          else if (local[sid][parent]) merged[sid][parent] = local[sid][parent];
         });
       });
-
-      localStorage.setItem('fc_attendance2', JSON.stringify(merged));
-      renderAttendancePage();
+      var mergedStr = JSON.stringify(merged);
+      var currentStr = localStorage.getItem('fc_attendance2') || '{}';
+      if (mergedStr !== currentStr) {
+        localStorage.setItem('fc_attendance2', mergedStr);
+        renderAttendancePage();
+      }
       var now = new Date();
-      var label = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+      var label = now.getHours()+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
       var indEl = document.getElementById('sync-indicator');
-      var keys = Object.keys(cloudData).length;
-      if (indEl) indEl.textContent = '🔄 ' + label + ' (' + keys + '件)';
+      if (indEl) indEl.textContent = '🔄 '+label+' 同期済';
     }).catch(function(){});
   }, 5000);
 }
+
 
 function stopAutoSync() {
   if (_autoSyncTimer) { clearInterval(_autoSyncTimer); _autoSyncTimer = null; }
@@ -1701,9 +1665,8 @@ function saveGasUrl() {
 async function gasReq(params) {
   if (!gasUrl) throw new Error('URL未設定');
   const url = gasUrl + '?' + new URLSearchParams(params);
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: 'no-store' });
   const data = await res.json();
-  if (data.error) throw new Error(data.error);
   return data;
 }
 async function testConnection() {
@@ -1728,8 +1691,15 @@ function setConnected(ok) {
 async function syncAll() {
   if (!gasUrl) return;
   document.getElementById('sync-status').textContent = '同期中...';
+  // マスタデータを独立して取得（他の処理が失敗しても実行）
+  pullMasterFromCloud().then(function() {
+    renderAttendancePage();
+  }).catch(function(){});
   try {
-    const [p, m] = await Promise.all([gasReq({action:'getPlayers'}), gasReq({action:'getMatches'})]);
+    const [p, m] = await Promise.all([
+      gasReq({action:'getPlayers'}),
+      gasReq({action:'getMatches'})
+    ]);
     const gasPlayers = Array.isArray(p) ? p : [];
     if (gasPlayers.length > 0) {
       players = gasPlayers;
@@ -1741,22 +1711,16 @@ async function syncAll() {
     localStorage.setItem('fc_players_permanent', JSON.stringify(players));
     localStorage.setItem('fc_players', JSON.stringify(players));
     localStorage.setItem('fc_matches', JSON.stringify(matches));
-    // マスタデータも取得
-    await pullMasterFromCloud();
     setConnected(true);
-    renderPlayers(); renderAllMatches();
-    // 出欠確認タブも更新
-    renderAttendancePage();
+    renderPlayers();
+    renderAllMatches();
   } catch(e) {
-    console.error('syncAll error:', e);
     document.getElementById('sync-status').textContent = '同期失敗';
-    // エラー時もマスタを取得しようとする
-    try { await pullMasterFromCloud(); } catch(e2) {}
     players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
     matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
     matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
-    renderPlayers(); renderAllMatches();
-    renderAttendancePage();
+    renderPlayers();
+    renderAllMatches();
   }
 }
 async function savePlayers() {
