@@ -1347,7 +1347,10 @@ function startAutoSync() {
       if (master.duty && typeof master.duty === 'object') {
         localStorage.setItem('fc_duty', JSON.stringify(master.duty));
       }
-      if (masterChanged) renderAttendancePage();
+      if (masterChanged && document.getElementById('page-attendance') &&
+          document.getElementById('page-attendance').classList.contains('active')) {
+        renderAttendancePage();
+      }
     }).catch(function(){});
 
     // 出欠データ同期
@@ -1385,8 +1388,11 @@ function startAutoSync() {
       });
 
       localStorage.setItem('fc_attendance2', JSON.stringify(merged));
-      // 常に再描画（変更検知に関わらず）
-      renderAttendancePage();
+      // 出欠確認タブが表示中の時だけ再描画
+      if (document.getElementById('page-attendance') && 
+          document.getElementById('page-attendance').classList.contains('active')) {
+        renderAttendancePage();
+      }
 
       var now = new Date();
       var label = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
@@ -1634,6 +1640,8 @@ window.onload = async () => {
   }
   // 初回訪問チェック（少し遅らせてUIが整ってから）
   setTimeout(checkFirstVisit, 500);
+  // どのタブにいても常に自動同期を開始
+  startAutoSync();
 };
 
 // ===== ユーティリティ =====
@@ -1649,8 +1657,7 @@ function showPage(name, btn) {
   if (btn) btn.classList.add('active');
   if (name === 'summary') loadSummary();
   if (name === 'result') renderResultPage();
-  if (name === 'attendance') { renderAttendancePage(); startAutoSync(); }
-  else { stopAutoSync(); }
+  if (name === 'attendance') { renderAttendancePage(); }
   if (name === 'duty') renderDutyPage();
 }
 function saveReportMeta() {
