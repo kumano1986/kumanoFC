@@ -370,6 +370,15 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
         <div id="family-list" style="margin-top:10px;"><div class="empty-state">読み込み中...</div></div>
         <div style="font-size:12px;color:var(--text-muted);text-align:right;margin-top:6px;" id="family-count"></div>
       </div>
+      <!-- 場所マスタ -->
+      <div class="card">
+        <div class="card-title">📍 場所を登録</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">日程追加・編集の場所プルダウンに表示されます</div>
+        <label>場所名</label>
+        <input type="text" id="input-venue" placeholder="例: 高島平多目的">
+        <button class="btn btn-primary btn-full" onclick="addVenueMaster()">＋ 場所を追加</button>
+        <div id="venue-list" style="margin-top:10px;"><div class="empty-state">まだ登録されていません</div></div>
+      </div>
       <!-- 試合名マスタ -->
       <div class="card">
         <div class="card-title">📋 試合名を登録</div>
@@ -797,10 +806,39 @@ function checkFirstVisit() {
 
 // 会場リスト（localStorage永続）
 function getVenues() {
-  var defaults = ['高島平多目的','板七小','板二小','大谷口小','板五小'];
-  return JSON.parse(localStorage.getItem('fc_venues') || JSON.stringify(defaults));
+  return JSON.parse(localStorage.getItem('fc_venues') || '[]');
 }
 function saveVenues(v) { localStorage.setItem('fc_venues', JSON.stringify(v)); pushMasterToCloud(); }
+
+function addVenueMaster() {
+  var name = document.getElementById('input-venue').value.trim();
+  if (!name) { showToast('場所名を入力してください'); return; }
+  var arr = getVenues();
+  if (arr.includes(name)) { showToast('すでに登録されています'); return; }
+  arr.push(name);
+  saveVenues(arr);
+  document.getElementById('input-venue').value = '';
+  renderVenues();
+  showToast(name + ' を登録しました ✅');
+}
+
+function removeVenue(name) {
+  var arr = getVenues().filter(function(v){ return v !== name; });
+  saveVenues(arr);
+  renderVenues();
+}
+
+function renderVenues() {
+  var el = document.getElementById('venue-list');
+  if (!el) return;
+  var arr = getVenues();
+  if (!arr.length) { el.innerHTML = '<div class="empty-state">まだ登録されていません</div>'; return; }
+  el.innerHTML = '<div class="player-chips">' +
+    arr.map(function(name) {
+      return '<div class="player-chip"><span>' + name + '</span>' +
+        '<button onclick="removeVenue(\'' + name + '\')">✕</button></div>';
+    }).join('') + '</div>';
+}
 
 // 日程リスト（localStorage永続）
 function getSchedules() {
@@ -1271,18 +1309,19 @@ function openSettings() {
   if (card) {
     card.style.border = getMyFamily() ? '2px solid var(--green)' : '2px solid #e6a817';
   }
-  // GASからマスタを取得してから描画
   if (gasUrl) {
     pullMasterFromCloud().then(function() {
       renderPlayers();
       renderFamilies();
       renderMatchNames();
+      renderVenues();
       updateMyFamilyDisplay();
     });
   } else {
     renderPlayers();
     renderFamilies();
     renderMatchNames();
+    renderVenues();
   }
 }
 
