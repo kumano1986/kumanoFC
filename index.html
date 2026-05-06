@@ -1398,9 +1398,10 @@ function startAutoSync() {
       if (!master || master.error) return;
       var masterChanged = false;
       if (Array.isArray(master.players)) {
-        var cur = localStorage.getItem('fc_players_permanent') || '[]';
-        var nw = JSON.stringify(master.players);
-        if (cur !== nw) {
+        var localPlayers = JSON.parse(localStorage.getItem('fc_players_permanent') || '[]');
+        var localIds = localPlayers.map(function(p){ return p.id; }).sort().join(',');
+        var cloudIds = master.players.map(function(p){ return p.id; }).sort().join(',');
+        if (localIds !== cloudIds) {
           localStorage.setItem('fc_players_permanent', JSON.stringify(master.players));
           localStorage.setItem('fc_players', JSON.stringify(master.players));
           players = master.players;
