@@ -2435,6 +2435,8 @@ function renderDutyPage() {
 
 // ===== 出欠・配車イベント委譲 =====
 document.addEventListener('click', function(e) {
+  var fb = e.target.closest('.att-family-btn');
+  if (fb) { selectMyFamily(fb.dataset.name); return; }
   var btn = e.target.closest('.att-btn');
   if (btn) { setAttendance(btn.dataset.sid, btn.dataset.parent, btn.dataset.val); return; }
   var sp = e.target.closest('.scorer-player-btn');
