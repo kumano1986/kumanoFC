@@ -1366,7 +1366,7 @@ function pushMasterToCloud() {
       duty:       JSON.parse(localStorage.getItem('fc_duty') || '{}')
     };
     gasReq({action: 'saveMaster', data: JSON.stringify(master)}).catch(function(){});
-  }, 1000);
+  }, 300);
 }
 
 async function pullMasterFromCloud() {
@@ -1394,17 +1394,9 @@ function startAutoSync() {
 
       if (Array.isArray(master.schedules)) {
         var cur = localStorage.getItem('fc_schedules') || '[]';
-        var curArr = JSON.parse(cur);
-        // クラウドの日程数がローカルより多い場合のみ更新（追加の反映）
-        // または日程が削除された場合（クラウドが少ない）も反映
         var nw = JSON.stringify(master.schedules);
         if (cur !== nw) {
-          // ローカルに自分が追加した日程があればマージ
-          var cloudIds = master.schedules.map(function(s){ return s.id; });
-          var localOnly = curArr.filter(function(s){ return cloudIds.indexOf(s.id) < 0; });
-          var merged = master.schedules.concat(localOnly);
-          merged.sort(function(a,b){ return a.date.localeCompare(b.date); });
-          localStorage.setItem('fc_schedules', JSON.stringify(merged));
+          localStorage.setItem('fc_schedules', nw);
           masterChanged = true;
         }
       }
