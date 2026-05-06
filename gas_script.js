@@ -13,7 +13,15 @@ function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
 
 function handleRequest(e) {
-  const p = e.parameter;
+  // GETはe.parameter、POSTのFormDataもe.parameterで取得可能
+  const p = e.parameter || {};
+  // POSTのJSONボディの場合はe.postDataから取得
+  if (!p.action && e.postData && e.postData.contents) {
+    try {
+      const body = JSON.parse(e.postData.contents);
+      Object.assign(p, body);
+    } catch(err) {}
+  }
   let result;
   try {
     if      (p.action === 'getPlayers')     result = getPlayers();

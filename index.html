@@ -1727,10 +1727,14 @@ function saveGasUrl() {
 async function gasReq(params) {
   if (!gasUrl) throw new Error('URL未設定');
   if (params.data) {
-    // データがある場合はPOSTで送信
-    const formData = new FormData();
-    Object.keys(params).forEach(function(k) { formData.append(k, params[k]); });
-    const res = await fetch(gasUrl, { method: 'POST', body: formData, cache: 'no-store' });
+    // データがある場合はPOSTで送信（URLSearchParams形式）
+    const body = new URLSearchParams(params);
+    const res = await fetch(gasUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+      cache: 'no-store'
+    });
     return await res.json();
   } else {
     // データなしはGET
