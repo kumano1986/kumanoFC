@@ -769,13 +769,21 @@ function setMyFamily(name) {
 function showFamilySelectModal() {
   var arr = getParents();
   var el = document.getElementById('family-select-list');
-  el.innerHTML = arr.map(function(name) {
-    return '<button onclick="selectMyFamily(\'' + name + '\')" style="' +
-      'padding:14px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;' +
-      'border:2px solid var(--card-border);background:white;color:var(--text);text-align:left;' +
-      'transition:all 0.1s;">' +
-      name + '</button>';
-  }).join('');
+  if (!arr.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:16px;">' +
+      '家族がまだ登録されていません。<br>⚙️設定から家族を登録してください。<br><br>' +
+      '<button onclick="document.getElementById(\'modal-select-family\').style.display=\'none\';openSettings();" ' +
+      'style="background:var(--green);color:white;border:none;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;">⚙️ 設定を開く</button>' +
+      '</div>';
+  } else {
+    el.innerHTML = arr.map(function(name) {
+      return '<button class="att-family-btn" data-name="' + name + '" style="' +
+        'padding:14px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;' +
+        'border:2px solid var(--card-border);background:white;color:var(--text);text-align:left;' +
+        'transition:all 0.1s;">' +
+        name + '</button>';
+    }).join('');
+  }
   document.getElementById('modal-select-family').style.display = 'flex';
 }
 
@@ -800,7 +808,16 @@ function updateMyFamilyDisplay() {
 
 function checkFirstVisit() {
   if (!getMyFamily()) {
-    showFamilySelectModal();
+    // まずGASからマスタを取得してから表示
+    if (gasUrl) {
+      pullMasterFromCloud().then(function() {
+        showFamilySelectModal();
+      }).catch(function() {
+        showFamilySelectModal();
+      });
+    } else {
+      showFamilySelectModal();
+    }
   }
 }
 
