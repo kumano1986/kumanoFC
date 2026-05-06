@@ -1352,11 +1352,13 @@ var _lastSyncLabel = null;
 
 // ===== マスタデータのクラウド同期 =====
 var _masterPushTimer = null;
+var _masterPushing = false;
 function pushMasterToCloud() {
-  // デバウンス：連続保存を防ぐ
   if (_masterPushTimer) clearTimeout(_masterPushTimer);
   _masterPushTimer = setTimeout(function() {
     if (typeof gasUrl === 'undefined' || !gasUrl) return;
+    _masterPushing = true;
+    stopAutoSync(); // 送信中は自動同期を停止
     var master = {
       schedules:  JSON.parse(localStorage.getItem('fc_schedules') || '[]'),
       parents:    JSON.parse(localStorage.getItem('fc_parents') || '[]'),
@@ -1366,7 +1368,15 @@ function pushMasterToCloud() {
       duty:       JSON.parse(localStorage.getItem('fc_duty') || '{}'),
       players:    JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]')
     };
-    gasReq({action: 'saveMaster', data: JSON.stringify(master)}).catch(function(){});
+    gasReq({action: 'saveMaster', data: JSON.stringify(master)})
+      .then(function(){
+        _masterPushing = false;
+        startAutoSync(); // 送信完了後に自動同期を再開
+      })
+      .catch(function(){
+        _masterPushing = false;
+        startAutoSync();
+      });
   }, 300);
 }
 
@@ -1409,7 +1419,7 @@ function startAutoSync() {
         }
       }
 
-      if (Array.isArray(master.schedules)) {
+      if (Array.isArray(master.schedules) && !_masterPushing) {
         var cur = localStorage.getItem('fc_schedules') || '[]';
         var nw = JSON.stringify(master.schedules);
         if (cur !== nw) {
