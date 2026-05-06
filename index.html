@@ -1363,7 +1363,8 @@ function pushMasterToCloud() {
       venues:     JSON.parse(localStorage.getItem('fc_venues') || '[]'),
       matchNames: JSON.parse(localStorage.getItem('fc_match_names') || '[]'),
       carpool:    JSON.parse(localStorage.getItem('fc_carpool') || '{}'),
-      duty:       JSON.parse(localStorage.getItem('fc_duty') || '{}')
+      duty:       JSON.parse(localStorage.getItem('fc_duty') || '{}'),
+      players:    JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]')
     };
     gasReq({action: 'saveMaster', data: JSON.stringify(master)}).catch(function(){});
   }, 300);
@@ -1374,6 +1375,11 @@ async function pullMasterFromCloud() {
   try {
     var master = await gasReq({action: 'getMaster'});
     if (!master || master.error) return;
+    if (Array.isArray(master.players) && master.players.length) {
+      localStorage.setItem('fc_players_permanent', JSON.stringify(master.players));
+      localStorage.setItem('fc_players', JSON.stringify(master.players));
+      players = master.players;
+    }
     if (Array.isArray(master.schedules))  { localStorage.setItem('fc_schedules',   JSON.stringify(master.schedules));  }
     if (Array.isArray(master.parents))    { localStorage.setItem('fc_parents',     JSON.stringify(master.parents));    _parentsCache = null; }
     if (Array.isArray(master.venues))     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
@@ -1391,6 +1397,16 @@ function startAutoSync() {
     gasReq({action:'getMaster'}).then(function(master) {
       if (!master || master.error) return;
       var masterChanged = false;
+      if (Array.isArray(master.players) && master.players.length) {
+        var cur = localStorage.getItem('fc_players_permanent') || '[]';
+        var nw = JSON.stringify(master.players);
+        if (cur !== nw) {
+          localStorage.setItem('fc_players_permanent', JSON.stringify(master.players));
+          localStorage.setItem('fc_players', JSON.stringify(master.players));
+          players = master.players;
+          renderPlayers();
+        }
+      }
 
       if (Array.isArray(master.schedules)) {
         var cur = localStorage.getItem('fc_schedules') || '[]';
@@ -1809,6 +1825,7 @@ async function savePlayers() {
   // 選手は永続キーに保存（試合リセットの影響を受けない）
   localStorage.setItem('fc_players_permanent', JSON.stringify(players));
   localStorage.setItem('fc_players', JSON.stringify(players));
+  pushMasterToCloud(); // マスタ経由でも同期
   if (!gasUrl) return;
   try { await gasReq({action:'savePlayers', data:JSON.stringify(players)}); } catch(e){}
 }
