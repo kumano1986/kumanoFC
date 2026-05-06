@@ -1617,9 +1617,9 @@ function renderAttendancePage() {
           '<div style="display:flex;align-items:center;gap:6px;">' +
             '<div style="font-size:13px;font-weight:700;color:var(--green);white-space:nowrap;">◯ ' + maru + '名</div>' +
             (isAdmin() ? '<button class="edit-sched-btn" data-sid="'+s.id+'" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;font-size:13px;cursor:pointer;padding:2px 7px;">✏️</button>' : '') +
-            (isAdmin() && !locked
-              ? '<button class="carpool-toggle-btn" data-sid="'+s.id+'" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;border:none;cursor:pointer;'+(s.carpool?'background:#fff3cd;color:#b7950b;':'background:#f0f0f0;color:#aaa;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</button>'
-              : '<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;'+(s.carpool?'background:#fff3cd;color:#b7950b;':'background:#f0f0f0;color:#aaa;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</span>') +
+            (isAdmin()
+              ? '<button class="carpool-toggle-btn" data-sid="'+s.id+'" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;border:none;cursor:pointer;'+(s.carpool?'background:#fff3cd;color:#b7950b;':'background:#f0f0f0;color:#888;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</button>'
+              : '<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;'+(s.carpool?'background:#fff3cd;color:#b7950b;':'background:#f0f0f0;color:#888;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</span>') +
             (isAdmin() ? '<button class="del-sched-btn" data-sid="'+s.id+'" style="background:none;border:none;color:#ccc;font-size:16px;cursor:pointer;padding:0;">🗑</button>' : '') +
           '</div>' +
         '</div>' +
