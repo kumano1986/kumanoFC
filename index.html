@@ -1375,7 +1375,7 @@ async function pullMasterFromCloud() {
   try {
     var master = await gasReq({action: 'getMaster'});
     if (!master || master.error) return;
-    if (Array.isArray(master.players) && master.players.length) {
+    if (Array.isArray(master.players)) {
       localStorage.setItem('fc_players_permanent', JSON.stringify(master.players));
       localStorage.setItem('fc_players', JSON.stringify(master.players));
       players = master.players;
@@ -1397,7 +1397,7 @@ function startAutoSync() {
     gasReq({action:'getMaster'}).then(function(master) {
       if (!master || master.error) return;
       var masterChanged = false;
-      if (Array.isArray(master.players) && master.players.length) {
+      if (Array.isArray(master.players)) {
         var cur = localStorage.getItem('fc_players_permanent') || '[]';
         var nw = JSON.stringify(master.players);
         if (cur !== nw) {
