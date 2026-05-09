@@ -923,6 +923,9 @@ function confirmSchedule(sid) {
   showToast('確定しました！');
 }
 
+// 最後に自分が編集した時刻を記録（sid+parent → timestamp）
+var _lastEditTime = {};
+
 function setAttendance(sid, parent, val) {
   var s = getSchedules().find(function(x){return x.id===sid;});
   if (s && s.locked) { showToast('🔒 全体締め切り済みです'); return; }
@@ -930,6 +933,8 @@ function setAttendance(sid, parent, val) {
   var d = getAttendanceData();
   if (!d[sid]) d[sid] = {};
   d[sid][parent] = (d[sid][parent] === val) ? '' : val;
+  // 編集時刻を記録
+  _lastEditTime[sid + '_' + parent] = Date.now();
   saveAttendanceData(d);
   renderAttendancePage();
 }
@@ -1486,17 +1491,22 @@ function startAutoSync() {
       var localStr = JSON.stringify(local);
       var cloudChanged = cloudStr !== localStr;
 
-      // マージ処理
+      // マージ処理（編集から10秒以内はローカル優先、それ以降はクラウド優先）
       var merged = JSON.parse(JSON.stringify(cloudData));
+      var now = Date.now();
       Object.keys(local).forEach(function(sid) {
         if (!merged[sid]) merged[sid] = {};
-        // クラウドで空（{}）になっているIDはクラウド優先（新しく追加された日程）
         var cloudSidEmpty = Object.keys(cloudData[sid] || {}).length === 0;
         if (cloudSidEmpty) return;
-        // 自分の家族の行だけローカル優先（管理者も同じ）
-        if (myFamily && local[sid][myFamily] !== undefined) {
-          merged[sid][myFamily] = local[sid][myFamily];
-        }
+        // 自分の家族の行、または最近編集した行はローカル優先
+        Object.keys(local[sid]).forEach(function(parent) {
+          var key = sid + '_' + parent;
+          var editedRecently = _lastEditTime[key] && (now - _lastEditTime[key]) < 10000;
+          var isOwn = parent === myFamily;
+          if (isOwn || editedRecently) {
+            merged[sid][parent] = local[sid][parent];
+          }
+        });
       });
 
       localStorage.setItem('fc_attendance2', JSON.stringify(merged));
