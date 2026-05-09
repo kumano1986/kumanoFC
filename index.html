@@ -619,9 +619,23 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       </div>
       <label>備考（任意）</label>
       <input type="text" id="edit-sched-note" style="margin-bottom:6px;">
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;">
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px;">
         <input type="checkbox" id="edit-sched-carpool" style="width:auto;margin:0;"> 配車あり
       </label>
+      <label>カードの背景色</label>
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+          <input type="radio" name="edit-sched-color" value="" style="width:auto;margin:0;"> デフォルト
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+          <input type="radio" name="edit-sched-color" value="yellow" style="width:auto;margin:0;">
+          <span style="background:#fffde7;border:1px solid #ddd;border-radius:4px;padding:2px 10px;">薄い黄色</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+          <input type="radio" name="edit-sched-color" value="gray" style="width:auto;margin:0;">
+          <span style="background:#f0f0f0;border:1px solid #ddd;border-radius:4px;padding:2px 10px;">灰色</span>
+        </label>
+      </div>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-primary" onclick="saveEditSchedule()" style="flex:1;">保存</button>
         <button class="btn btn-outline" onclick="closeModal('modal-edit-schedule')" style="flex:1;">キャンセル</button>
@@ -981,6 +995,11 @@ function showEditScheduleModal(sid) {
   document.getElementById('edit-sched-grade').value = s.grade;
   document.getElementById('edit-sched-note').value = s.note || '';
   document.getElementById('edit-sched-carpool').checked = s.carpool || false;
+  // 背景色を設定
+  var color = s.color || '';
+  document.querySelectorAll('input[name="edit-sched-color"]').forEach(function(r) {
+    r.checked = r.value === color;
+  });
   document.getElementById('edit-venue-input-area').style.display = 'none';
 
   // venue から場所と時間を分離（例: "高島平多目的 8:50〜11:00"）
@@ -1032,6 +1051,8 @@ function saveEditSchedule() {
   var tEnd   = document.getElementById('edit-sched-time-end').value;
   var note   = document.getElementById('edit-sched-note').value.trim();
   var carpool = document.getElementById('edit-sched-carpool').checked;
+  var colorEl = document.querySelector('input[name="edit-sched-color"]:checked');
+  var color = colorEl ? colorEl.value : '';
   if (!date)  { showToast('日付を入力してください'); return; }
   if (!place) { showToast('場所を選択してください'); return; }
   var timeStr = tStart && tEnd ? ' ' + tStart + '〜' + tEnd : tStart ? ' ' + tStart + '〜' : '';
@@ -1044,6 +1065,7 @@ function saveEditSchedule() {
     s.venue = venue;
     s.note = note;
     s.carpool = carpool;
+    s.color = color;
   }
   saveSchedules(scheds);
   closeModal('modal-edit-schedule');
@@ -1434,8 +1456,12 @@ function startAutoSync() {
       }
       if (Array.isArray(master.venues))     localStorage.setItem('fc_venues',      JSON.stringify(master.venues));
       if (Array.isArray(master.matchNames)) localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames));
-      if (master.carpool && typeof master.carpool==='object') localStorage.setItem('fc_carpool', JSON.stringify(master.carpool));
-      if (master.duty    && typeof master.duty   ==='object') localStorage.setItem('fc_duty',    JSON.stringify(master.duty));
+      if (master.carpool && typeof master.carpool==='object') {
+        var curCp = localStorage.getItem('fc_carpool') || '{}';
+        var nwCp = JSON.stringify(master.carpool);
+        if (curCp !== nwCp) { localStorage.setItem('fc_carpool', nwCp); masterChanged = true; }
+      }
+      if (master.duty && typeof master.duty==='object') localStorage.setItem('fc_duty', JSON.stringify(master.duty));
       if (masterChanged) { _parentsCache = null; renderAttendancePage(); }
     }).catch(function(){});
     // 出欠データ同期
@@ -1629,8 +1655,9 @@ function renderAttendancePage() {
         '</div>';
     });
 
+    var cardBg = s.color === 'yellow' ? 'background:#fffde7;' : s.color === 'gray' ? 'background:#f0f0f0;' : '';
     html +=
-      '<div class="card" style="'+(locked?'opacity:0.85;border:1.5px solid #f5c0bb;':'')+'">' +
+      '<div class="card" style="'+(locked?'opacity:0.85;border:1.5px solid #f5c0bb;':'')+cardBg+'">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">' +
           '<div>' +
             '<div style="display:flex;align-items:center;gap:6px;">' +
