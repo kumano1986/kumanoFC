@@ -1494,15 +1494,10 @@ function startAutoSync() {
         if (!merged[sid]) merged[sid] = {};
         // クラウドで空（{}）になっているIDはクラウド優先（新しく追加された日程）
         var cloudSidEmpty = Object.keys(cloudData[sid] || {}).length === 0;
-        if (cloudSidEmpty) return; // クラウドが空なら上書きしない（新日程扱い）
-        if (admin) {
-          Object.keys(local[sid]).forEach(function(parent) {
-            merged[sid][parent] = local[sid][parent];
-          });
-        } else if (myFamily) {
-          if (local[sid][myFamily] !== undefined) {
-            merged[sid][myFamily] = local[sid][myFamily];
-          }
+        if (cloudSidEmpty) return;
+        // 自分の家族の行だけローカル優先（管理者も同じ）
+        if (myFamily && local[sid][myFamily] !== undefined) {
+          merged[sid][myFamily] = local[sid][myFamily];
         }
       });
 
@@ -1529,15 +1524,10 @@ async function loadAttendanceFromCloud() {
     if (!cloudData || typeof cloudData !== 'object' || cloudData.error) return;
     var local = JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
     var myFamily = getMyFamily();
-    var admin = isAdmin();
     var merged = JSON.parse(JSON.stringify(cloudData));
     Object.keys(local).forEach(function(sid) {
       if (!merged[sid]) merged[sid] = {};
-      if (admin) {
-        Object.keys(local[sid]).forEach(function(parent) {
-          merged[sid][parent] = local[sid][parent];
-        });
-      } else if (myFamily && local[sid][myFamily] !== undefined) {
+      if (myFamily && local[sid][myFamily] !== undefined) {
         merged[sid][myFamily] = local[sid][myFamily];
       }
     });
