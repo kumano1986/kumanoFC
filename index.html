@@ -1156,10 +1156,6 @@ function deleteAllSchedules() {
   renderAttendancePage();
   showToast('🗑 全日程を削除しました');
 }
-  document.getElementById('modal-settings').style.display = 'none';
-  renderAttendancePage();
-  showToast('🗑 全日程を削除しました');
-}
 
 function showAddScheduleModal() {
   var today = new Date().toISOString().split('T')[0];
@@ -1415,14 +1411,8 @@ function pushMasterToCloud() {
       players:    JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]')
     };
     gasReq({action: 'saveMaster', data: JSON.stringify(master)})
-      .then(function(){
-        _masterPushing = false;
-        startAutoSync(); // 送信完了後に自動同期を再開
-      })
-      .catch(function(){
-        _masterPushing = false;
-        startAutoSync();
-      });
+      .then(function(){ _masterPushing = false; })
+      .catch(function(){ _masterPushing = false; });
   }, 300);
 }
 
