@@ -1499,10 +1499,8 @@ function startAutoSync() {
         });
       }
 
-      var mergedStr = JSON.stringify(merged);
-      var currentStr = localStorage.getItem('fc_attendance2') || '{}';
-      localStorage.setItem('fc_attendance2', mergedStr);
-      if (mergedStr !== currentStr) renderAttendancePage();
+      localStorage.setItem('fc_attendance2', JSON.stringify(merged));
+      renderAttendancePage(); // 常に再描画
 
       var nowTime = new Date();
       var label = nowTime.getHours()+':'+String(nowTime.getMinutes()).padStart(2,'0')+':'+String(nowTime.getSeconds()).padStart(2,'0');
