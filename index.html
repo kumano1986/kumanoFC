@@ -7,13 +7,11 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <script>
-// 毎回最新版を読み込む（キャッシュ回避）
+// 毎回必ず最新版を読み込む（アクセスのたびにタイムスタンプを付与）
 (function() {
   var url = new URL(window.location.href);
-  var v = url.searchParams.get('v');
-  var today = new Date().toISOString().slice(0,10).replace(/-/g,'');
-  if (v !== today) {
-    url.searchParams.set('v', today);
+  if (!url.searchParams.get('t')) {
+    url.searchParams.set('t', Date.now());
     window.location.replace(url.toString());
   }
 })();
