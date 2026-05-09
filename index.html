@@ -1400,7 +1400,6 @@ function pushMasterToCloud() {
   _masterPushTimer = setTimeout(function() {
     if (typeof gasUrl === 'undefined' || !gasUrl) return;
     _masterPushing = true;
-    stopAutoSync(); // 送信中は自動同期を停止
     var master = {
       schedules:  JSON.parse(localStorage.getItem('fc_schedules') || '[]'),
       parents:    JSON.parse(localStorage.getItem('fc_parents') || '[]'),
