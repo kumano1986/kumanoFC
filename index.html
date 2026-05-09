@@ -1132,7 +1132,6 @@ function unlockAllSchedules() {
 
 function deleteAllSchedules() {
   if (!confirm('出欠確認の全日程を削除しますか？\n出欠データもすべてリセットされます。\nこの操作は元に戻せません。')) return;
-  // 自動同期を一時停止
   stopAutoSync();
   // ローカル削除
   localStorage.removeItem('fc_schedules');
@@ -1141,18 +1140,22 @@ function deleteAllSchedules() {
   localStorage.removeItem('fc_confirmed');
   localStorage.removeItem('fc_personal_lock');
   localStorage.removeItem('fc_duty');
-  // クラウドも削除（clearAttendance → 空データで上書き）
+  // クラウドも削除
   if (typeof gasUrl !== 'undefined' && gasUrl) {
+    // マスタの日程も空に
+    pushMasterToCloud();
+    // 出欠シートも空に
     gasReq({action: 'clearAttendance'})
       .then(function(){ return gasReq({action: 'saveAttendance', data: '{}'}); })
       .catch(function(){})
-      .finally(function(){
-        // 削除完了後に自動同期を再開
-        startAutoSync();
-      });
+      .finally(function(){ startAutoSync(); });
   } else {
     startAutoSync();
   }
+  document.getElementById('modal-settings').style.display = 'none';
+  renderAttendancePage();
+  showToast('🗑 全日程を削除しました');
+}
   document.getElementById('modal-settings').style.display = 'none';
   renderAttendancePage();
   showToast('🗑 全日程を削除しました');
@@ -1211,6 +1214,13 @@ function addSchedule() {
   while (scheds.find(function(s){return s.id===id;})) { id = date+'_'+grade+'_'+n; n++; }
   scheds.push({id:id, date:date, grade:grade, venue:venue, note:note, carpool:carpool, archived:false, locked:false});
   scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
+  // 新しい日程IDの出欠・配車データを明示的に空に初期化
+  var attData = getAttendanceData();
+  attData[id] = {};
+  saveAttendanceData(attData);
+  var cpData = getCarpoolData();
+  cpData[id] = {};
+  saveCarpoolData(cpData);
   saveSchedules(scheds);
   closeModal('modal-add-schedule');
   renderAttendancePage();
