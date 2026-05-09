@@ -1487,20 +1487,24 @@ function startAutoSync() {
       var myFamily = getMyFamily();
       var admin = isAdmin();
 
-      // クラウドデータをそのまま使い、自分の行だけ上書き
+      // クラウドデータをベースに、自分が直近10秒以内に編集した行だけローカル優先
       var merged = JSON.parse(JSON.stringify(cloudData));
+      var nowMs = Date.now();
       if (myFamily) {
         var localAtt = JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
         Object.keys(localAtt).forEach(function(sid) {
           if (!merged[sid]) merged[sid] = {};
-          if (localAtt[sid][myFamily] !== undefined) {
+          var key = sid + '_' + myFamily;
+          var lastEdit = _lastEditTime[key] || 0;
+          var recentlyEdited = (nowMs - lastEdit) < 10000; // 10秒以内
+          if (recentlyEdited && localAtt[sid][myFamily] !== undefined) {
             merged[sid][myFamily] = localAtt[sid][myFamily];
           }
         });
       }
 
       localStorage.setItem('fc_attendance2', JSON.stringify(merged));
-      renderAttendancePage(); // 常に再描画
+      renderAttendancePage();
 
       var nowTime = new Date();
       var label = nowTime.getHours()+':'+String(nowTime.getMinutes()).padStart(2,'0')+':'+String(nowTime.getSeconds()).padStart(2,'0');
