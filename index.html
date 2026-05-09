@@ -1482,17 +1482,23 @@ function startAutoSync() {
       if (!cloudData || typeof cloudData!=='object' || cloudData.error) return;
       var local = JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
       var myFamily = getMyFamily();
-      // クラウドデータを基本として、自分の家族の行だけローカル優先
+      var admin = isAdmin();
+      // クラウドデータを基本として、自分の家族の行（管理者は全行）はローカル優先
       var merged = JSON.parse(JSON.stringify(cloudData));
-      if (myFamily) {
-        Object.keys(local).forEach(function(sid) {
-          if (!merged[sid]) merged[sid] = {};
-          // 自分の家族の行だけローカル優先
+      Object.keys(local).forEach(function(sid) {
+        if (!merged[sid]) merged[sid] = {};
+        if (admin) {
+          // 管理者は全家族の行をローカル優先
+          Object.keys(local[sid]).forEach(function(parent) {
+            merged[sid][parent] = local[sid][parent];
+          });
+        } else if (myFamily) {
+          // 一般は自分の行だけローカル優先
           if (local[sid][myFamily] !== undefined) {
             merged[sid][myFamily] = local[sid][myFamily];
           }
-        });
-      }
+        }
+      });
       var mergedStr = JSON.stringify(merged);
       var currentStr = localStorage.getItem('fc_attendance2') || '{}';
       if (mergedStr !== currentStr) {
@@ -1519,16 +1525,18 @@ async function loadAttendanceFromCloud() {
     if (!cloudData || typeof cloudData !== 'object' || cloudData.error) return;
     var local = JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
     var myFamily = getMyFamily();
-    // クラウドデータを基本として、自分の家族の行だけローカル優先
+    var admin = isAdmin();
     var merged = JSON.parse(JSON.stringify(cloudData));
-    if (myFamily) {
-      Object.keys(local).forEach(function(sid) {
-        if (!merged[sid]) merged[sid] = {};
-        if (local[sid][myFamily] !== undefined) {
-          merged[sid][myFamily] = local[sid][myFamily];
-        }
-      });
-    }
+    Object.keys(local).forEach(function(sid) {
+      if (!merged[sid]) merged[sid] = {};
+      if (admin) {
+        Object.keys(local[sid]).forEach(function(parent) {
+          merged[sid][parent] = local[sid][parent];
+        });
+      } else if (myFamily && local[sid][myFamily] !== undefined) {
+        merged[sid][myFamily] = local[sid][myFamily];
+      }
+    });
     localStorage.setItem('fc_attendance2', JSON.stringify(merged));
   } catch(e) {}
 }
