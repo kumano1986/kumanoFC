@@ -1214,13 +1214,14 @@ function addSchedule() {
   while (scheds.find(function(s){return s.id===id;})) { id = date+'_'+grade+'_'+n; n++; }
   scheds.push({id:id, date:date, grade:grade, venue:venue, note:note, carpool:carpool, archived:false, locked:false});
   scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
-  // 新しい日程IDの出欠・配車データを明示的に空に初期化
+  // 新しい日程の出欠・配車データを空に初期化（直接localStorageに書き込み）
   var attData = getAttendanceData();
   attData[id] = {};
-  saveAttendanceData(attData);
+  localStorage.setItem('fc_attendance2', JSON.stringify(attData));
+  gasReq({action:'saveAttendance', data:JSON.stringify(attData)}).catch(function(){});
   var cpData = getCarpoolData();
   cpData[id] = {};
-  saveCarpoolData(cpData);
+  localStorage.setItem('fc_carpool', JSON.stringify(cpData));
   saveSchedules(scheds);
   closeModal('modal-add-schedule');
   renderAttendancePage();
