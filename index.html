@@ -1491,23 +1491,22 @@ function startAutoSync() {
       var localStr = JSON.stringify(local);
       var cloudChanged = cloudStr !== localStr;
 
-      // マージ処理（編集から10秒以内はローカル優先、それ以降はクラウド優先）
+      // マージ処理：自分の行だけローカル優先、他は常にクラウド優先
       var merged = JSON.parse(JSON.stringify(cloudData));
       var now = Date.now();
-      Object.keys(local).forEach(function(sid) {
-        if (!merged[sid]) merged[sid] = {};
-        var cloudSidEmpty = Object.keys(cloudData[sid] || {}).length === 0;
-        if (cloudSidEmpty) return;
-        // 自分の家族の行、または最近編集した行はローカル優先
-        Object.keys(local[sid]).forEach(function(parent) {
-          var key = sid + '_' + parent;
+      if (myFamily) {
+        Object.keys(local).forEach(function(sid) {
+          if (!merged[sid]) merged[sid] = {};
+          var cloudSidEmpty = Object.keys(cloudData[sid] || {}).length === 0;
+          if (cloudSidEmpty) return;
+          // 自分の行、または直近10秒以内に自分が編集した行のみローカル優先
+          var key = sid + '_' + myFamily;
           var editedRecently = _lastEditTime[key] && (now - _lastEditTime[key]) < 10000;
-          var isOwn = parent === myFamily;
-          if (isOwn || editedRecently) {
-            merged[sid][parent] = local[sid][parent];
+          if (local[sid][myFamily] !== undefined) {
+            merged[sid][myFamily] = local[sid][myFamily];
           }
         });
-      });
+      }
 
       localStorage.setItem('fc_attendance2', JSON.stringify(merged));
       if (cloudChanged) renderAttendancePage();
