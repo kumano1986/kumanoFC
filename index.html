@@ -1472,6 +1472,55 @@ function renderPlayers() {
   if (cnt) cnt.textContent = `計 ${players.length} 名`;
 }
 
+async function addPlayer() {
+  const inp = document.getElementById('input-player');
+  const name = inp.value.trim();
+  if (!name) { showToast('選手名を入力してください'); return; }
+  if (players.some(p=>p.name===name)) { showToast('すでに登録されています'); return; }
+  const id = Date.now();
+  players.push({id, name});
+  inp.value = '';
+  await savePlayers();
+  renderPlayers();
+  showToast(name + ' を登録しました ✅');
+}
+
+async function removePlayer(id) {
+  players = players.filter(p=>p.id!==id);
+  await savePlayers();
+  renderPlayers();
+  renderAllMatches();
+}
+
+async function savePlayers() {
+  localStorage.setItem('fc_players_permanent', JSON.stringify(players));
+  localStorage.setItem('fc_players', JSON.stringify(players));
+  pushMasterToCloud();
+  if (!gasUrl) return;
+  try { await gasReq({action:'savePlayers', data:JSON.stringify(players)}); } catch(e){}
+}
+
+async function saveMatches() {
+  localStorage.setItem('fc_matches', JSON.stringify(matches));
+}
+
+async function submitToSummary() {
+  if (!matches.length) { showToast('試合データがありません'); return; }
+  if (!confirm('試合結果を確定してスプレッドシートに送信しますか？')) return;
+  const date = reportMeta.date;
+  try {
+    for (const m of matches) {
+      await gasReq({
+        action: 'addMatchRecord',
+        data: JSON.stringify({date, match:m, players})
+      });
+    }
+    showToast('✅ 試合結果を送信しました');
+  } catch(e) {
+    showToast('❌ 送信失敗: ' + e.message);
+  }
+}
+
 async function loadSummary() {
   const nendoEl = document.getElementById('current-nendo');
   const nendo = nendoEl ? nendoEl.value : new Date().getFullYear();
@@ -1910,6 +1959,43 @@ var _i18n = {
     carpool_players: '選手',
     carpool_companions: '同伴',
     lang: '🌐 言語 / Language',
+    setting_lang: '🌐 言語',
+    setting_lock_desc: '全日程の出欠を締め切ります。締切後は◯△×を変更できません。',
+    setting_lock_btn: '🔒 全日程を締め切る',
+    setting_unlock_btn: '🔓 締め切りを解除',
+    setting_delete_desc: '全ての日程と出欠データを削除します。',
+    setting_delete_btn: '🗑 全日程を削除',
+    setting_gas_url: 'GAS URL',
+    setting_gas_test: '🔌 接続テスト',
+    setting_gas_guide: '📋 GAS設定ガイド',
+    setting_install: '📱 ホーム画面に追加',
+    basic_info: '基本情報',
+    date: '日付',
+    opponent: '対戦相手',
+    match_name: '試合名',
+    score: '得点',
+    concede: '失点',
+    scorer: '得点者',
+    first_half: '前半',
+    second_half: '後半',
+    pk: 'PK',
+    add_scorer_h1: '＋ 前半',
+    add_scorer_h2: '＋ 後半',
+    add_player: '＋ 選手追加',
+    add_family: '＋ 家族追加',
+    add_venue: '＋ 場所追加',
+    add_match_name: '＋ 試合名追加',
+    duty_assign: '当番割当',
+    duty_monthly: '月別当番回数',
+    select_year: '年度選択',
+    yearly_record: '年度成績',
+    wins: '勝', losses: '負', draws: '分',
+    goals: '得点', conceded_total: '失点', diff: '得失点差',
+    top_scorers: '得点ランキング',
+    share_line: '📤 LINEで共有',
+    carpool_header: '配車',
+    attend_header: '出欠確認',
+    sync: '同期',
   },
   en: {
     tab_report: '📋 Match',
@@ -2558,6 +2644,23 @@ document.addEventListener('change', function(e) {
   var cn = e.target.closest('.cp-num');
   if (cn) { setCarpoolNum(cn.dataset.sid, cn.dataset.parent, cn.dataset.field, cn.value); }
 });
+
+// ===== 初期化 =====
+window.onload = async () => {
+  const today = new Date().toISOString().split('T')[0];
+  const dateEl = document.getElementById('report-date');
+  if (dateEl) dateEl.value = reportMeta.date || today;
+  if (!gasUrl) gasUrl = DEFAULT_GAS_URL;
+  localStorage.setItem('fc_gas_url', gasUrl);
+  const urlEl = document.getElementById('gas-url');
+  if (urlEl) urlEl.value = gasUrl;
+  players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
+  renderPlayers();
+  try { await syncAll(); } catch(e) {}
+  setTimeout(checkFirstVisit, 500);
+  startAutoSync();
+  applyLang();
+};
 
 </script>
 </body>
