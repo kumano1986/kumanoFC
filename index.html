@@ -2143,6 +2143,13 @@ async function addMatch() {
   // スクロール
   setTimeout(()=>{ const last=document.querySelector('.match-card:last-child'); if(last) last.scrollIntoView({behavior:'smooth', block:'start'}); }, 100);
 }
+
+function totalK(m) {
+  return (m.scores?.h1_k||0) + (m.scores?.h2_k||0);
+}
+function totalO(m) {
+  return (m.scores?.h1_o||0) + (m.scores?.h2_o||0);
+}
 async function removeMatch(id) {
   matches = matches.filter(m=>m.id!==id);
   // 削除後に連番を振り直す
