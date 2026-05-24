@@ -1,37 +1,19 @@
-// v20260509 - キャッシュ完全無効化
-const CACHE_VERSION = 'fc-kumano-nocache-v3';
-
-self.addEventListener('install', function(e) {
-  self.skipWaiting();
-});
-
+// ServiceWorker完全無効化（PWAのキャッシュ問題対策）
+self.addEventListener('install', function() { self.skipWaiting(); });
 self.addEventListener('activate', function(e) {
   e.waitUntil(
     caches.keys().then(function(keys) {
-      return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+      return Promise.all(keys.map(function(k){ return caches.delete(k); }));
     }).then(function() {
-      return self.clients.claim();
+      return self.registration.unregister();
     }).then(function() {
-      // 全クライアントにリロードを要求
-      return self.clients.matchAll({ type: 'window' });
+      return self.clients.matchAll();
     }).then(function(clients) {
-      clients.forEach(function(client) { client.navigate(client.url); });
+      clients.forEach(function(c) { c.navigate(c.url); });
     })
   );
 });
-
 self.addEventListener('fetch', function(e) {
-  // HTMLファイルは必ずネットワークから取得
-  if (e.request.mode === 'navigate' || e.request.url.includes('index.html')) {
-    e.respondWith(
-      fetch(e.request, { cache: 'no-store' })
-    );
-    return;
-  }
-  // その他も基本ネットワーク優先
-  e.respondWith(
-    fetch(e.request, { cache: 'no-store' }).catch(function() {
-      return caches.match(e.request);
-    })
-  );
+  // 何もキャッシュせず常にネットワークから取得
+  e.respondWith(fetch(e.request, { cache: 'no-store' }));
 });
