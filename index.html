@@ -355,16 +355,24 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       <button onclick="closeModal('modal-settings')" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:18px;border-radius:8px;padding:4px 10px;cursor:pointer;">✕</button>
     </div>
     <div style="padding:12px;">
+      <!-- 言語設定 -->
+      <div class="card">
+        <div class="card-title">🌐 言語 / Language</div>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+          <button onclick="setLang('ja')" id="lang-btn-ja" style="flex:1;padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid var(--green);background:var(--green);color:white;">日本語</button>
+          <button onclick="setLang('en')" id="lang-btn-en" style="flex:1;padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid #ddd;background:white;color:#888;">English</button>
+        </div>
+      </div>
       <!-- 自分の家族 -->
       <div class="card" id="my-family-card" style="border:2px solid var(--green);">
-        <div class="card-title">👤 自分の家族</div>
+        <div class="card-title" id="ct-my-family">👤 自分の家族</div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認で自分の行だけ入力できます<br><b>※出欠確認を使うには必ず選択してください</b></div>
         <div id="my-family-display" style="font-size:16px;font-weight:700;margin-bottom:12px;"></div>
         <button class="btn btn-primary btn-full" onclick="showFamilySelectModal()">👤 家族を選択する</button>
       </div>
       <!-- 選手登録 -->
       <div class="card">
-        <div class="card-title">⚽ 選手を登録</div>
+        <div class="card-title" id="ct-players">⚽ 選手を登録</div>
         <label>選手名</label>
         <input type="text" id="input-name" placeholder="例: メッシ">
         <button class="btn btn-primary btn-full" onclick="addPlayer()">＋ 選手を追加</button>
@@ -373,7 +381,7 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       </div>
       <!-- 家族管理 -->
       <div class="card">
-        <div class="card-title">👨‍👩‍👧 家族を登録</div>
+        <div class="card-title" id="ct-families">👨‍👩‍👧 家族を登録</div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">出欠確認・当番で使用する家族名を管理します</div>
         <label>家族名</label>
         <input type="text" id="input-family" placeholder="例: 田中">
@@ -383,7 +391,7 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       </div>
       <!-- 場所マスタ -->
       <div class="card">
-        <div class="card-title">📍 場所を登録</div>
+        <div class="card-title" id="ct-venues">📍 場所を登録</div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">日程追加・編集の場所プルダウンに表示されます</div>
         <label>場所名</label>
         <input type="text" id="input-venue" placeholder="例: 高島平多目的">
@@ -392,7 +400,7 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       </div>
       <!-- 試合名マスタ -->
       <div class="card">
-        <div class="card-title">📋 試合名を登録</div>
+        <div class="card-title" id="ct-matchnames">📋 試合名を登録</div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">試合カードの試合名プルダウンに表示されます</div>
         <label>試合名</label>
         <input type="text" id="input-match-name" placeholder="例: 練習試合・板橋区リーグ">
@@ -420,14 +428,14 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       </div>
       <!-- 出欠一括締め切り -->
       <div class="card">
-        <div class="card-title">🔒 出欠確認の締め切り</div>
+        <div class="card-title" id="ct-lock">🔒 出欠確認の締め切り</div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">全日程の出欠入力を締め切ります。締め切り後は◯△×の変更ができなくなります。</div>
         <button class="btn btn-full" onclick="lockAllSchedules()" style="background:#c0392b;color:white;font-weight:700;margin-bottom:8px;">🔒 全日程を締め切る</button>
         <button class="btn btn-outline btn-full" onclick="unlockAllSchedules()">🔓 全日程のロックを解除</button>
       </div>
       <!-- 日程一括削除 -->
       <div class="card">
-        <div class="card-title">🗑 日程の一括削除</div>
+        <div class="card-title" id="ct-delete">🗑 日程の一括削除</div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認タブのすべての日程カードを削除します。出欠データも合わせてリセットされます。</div>
         <button type="button" class="btn btn-full" onclick="deleteAllSchedules()" style="background:#888;color:white;font-weight:700;border:none;cursor:pointer;">🗑 全日程を削除する</button>
       </div>
@@ -458,7 +466,7 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
     </div>
   </div>
   <div class="card">
-    <div class="card-title">基本情報</div>
+    <div class="card-title" id="ct-basic">基本情報</div>
     <label>日時</label>
     <input type="date" id="report-date" oninput="saveReportMeta()" style="margin-bottom:0;">
   </div>
@@ -466,11 +474,11 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
   <div class="add-btn-row">
     <button class="btn btn-outline" onclick="addMatch()">＋ 試合を追加</button>
   </div>
-  <button class="btn btn-full" onclick="submitToSummary()" style="margin-top:8px;background:#e74c3c;color:white;font-weight:700;font-size:15px;padding:14px;border:none;border-radius:10px;cursor:pointer;">
+  <button class="btn btn-full" id="btn-finish-match" onclick="submitToSummary()" style="margin-top:8px;background:#e74c3c;color:white;font-weight:700;font-size:15px;padding:14px;border:none;border-radius:10px;cursor:pointer;">
     🏁 試合が終わったら押してください
   </button>
   <div style="margin-top:8px;">
-    <button class="btn btn-share btn-full" onclick="showPage('result', document.querySelector('.tab-bar button:nth-child(2)'))">🏆 試合結果を確認・共有</button>
+    <button class="btn btn-share btn-full" onclick="showPage('result', document.querySelector('.tab-bar button:nth-child(2)'))" id="btn-view-result">🏆 試合結果を確認・共有</button>
   </div>
 </div>
 
@@ -496,12 +504,12 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
   <!-- コントロールバー -->
   <div class="card" style="padding:12px 14px;">
     <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <button class="btn btn-primary btn-sm" onclick="showAddScheduleModal()" style="flex:1;">＋ 日程追加</button>
-      <button class="btn btn-outline btn-sm" onclick="showArchiveModal()" style="flex:1;">📦 アーカイブ</button>
+      <button class="btn btn-primary btn-sm" onclick="showAddScheduleModal()" style="flex:1;" id="btn-add-schedule">＋ 日程追加</button>
+      <button class="btn btn-outline btn-sm" onclick="showArchiveModal()" style="flex:1;" id="btn-archive">📦 アーカイブ</button>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <div id="att-my-family-badge" style="font-size:12px;font-weight:700;color:var(--green);"></div>
-      <div id="sync-indicator" style="font-size:10px;color:var(--text-muted);">自動同期: 5秒ごと</div>
+      <div id="sync-indicator" style="font-size:10px;color:var(--text-muted);"><span id='sync-init-text'>自動同期: 5秒ごと</span></div>
     </div>
     <div style="margin-top:8px;padding:8px 10px;background:#f8f8f8;border-radius:8px;font-size:11px;color:var(--text-muted);line-height:1.8;">
       <span style="color:#2d7a4f;font-weight:700;">◯</span> 参加　
@@ -1364,6 +1372,127 @@ function importFromExcel() {
   excelRows = [];
 }
 
+// ===== ユーティリティ =====
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-bar button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (name === 'summary') loadSummary();
+  if (name === 'result') renderResultPage();
+  if (name === 'attendance') renderAttendancePage();
+  if (name === 'duty') renderDutyPage();
+}
+
+function setConnected(ok) {
+  const el = document.getElementById('sync-status');
+  if (el) el.textContent = ok ? '✅ 接続済み' : '❌ 未接続';
+}
+
+async function testConnection() {
+  if (!gasUrl) { showToast('URLを入力してください'); return; }
+  showToast('接続テスト中...');
+  try {
+    await gasReq({ action: 'getPlayers' });
+    setConnected(true);
+    showToast('✅ 接続成功！');
+    await syncAll();
+  } catch(e) {
+    setConnected(false);
+    showToast('❌ 失敗: ' + e.message);
+  }
+}
+
+function saveGasUrl() {
+  gasUrl = document.getElementById('gas-url').value.trim();
+  localStorage.setItem('fc_gas_url', gasUrl);
+}
+
+async function gasReq(params) {
+  if (!gasUrl) throw new Error('URL未設定');
+  const url = gasUrl + '?' + new URLSearchParams(params);
+  const res = await fetch(url, { cache: 'no-store' });
+  return await res.json();
+}
+
+async function syncAll() {
+  if (!gasUrl) return;
+  document.getElementById('sync-status').textContent = '同期中...';
+  pullMasterFromCloud().then(function() {
+    renderAttendancePage();
+  }).catch(function(){});
+  try {
+    const [p, m] = await Promise.all([
+      gasReq({action:'getPlayers'}),
+      gasReq({action:'getMatches'})
+    ]);
+    const gasPlayers = Array.isArray(p) ? p : [];
+    if (gasPlayers.length > 0) {
+      players = gasPlayers;
+    } else {
+      players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
+    }
+    matches = Array.isArray(m) ? m : [];
+    matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
+    localStorage.setItem('fc_players_permanent', JSON.stringify(players));
+    localStorage.setItem('fc_players', JSON.stringify(players));
+    localStorage.setItem('fc_matches', JSON.stringify(matches));
+    setConnected(true);
+    renderPlayers();
+    renderAllMatches();
+  } catch(e) {
+    document.getElementById('sync-status').textContent = '同期失敗';
+    players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
+    matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
+    matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
+    renderPlayers();
+    renderAllMatches();
+  }
+}
+
+function renderPlayers() {
+  const el = document.getElementById('player-list');
+  if (!el) return;
+  if (!players.length) {
+    el.innerHTML = '<div class="empty-state">まだ選手が登録されていません</div>';
+    const cnt = document.getElementById('player-count');
+    if (cnt) cnt.textContent = '';
+    return;
+  }
+  el.innerHTML = '<div class="player-grid">' +
+    players.map(p=>`<div class="player-chip"><span>${p.name}</span><button onclick="removePlayer(${p.id})">✕</button></div>`).join('') + '</div>';
+  const cnt = document.getElementById('player-count');
+  if (cnt) cnt.textContent = `計 ${players.length} 名`;
+}
+
+async function loadSummary() {
+  const nendoEl = document.getElementById('current-nendo');
+  const nendo = nendoEl ? nendoEl.value : new Date().getFullYear();
+  try {
+    const data = await gasReq({action:'getSummary', nendo});
+    const el = document.getElementById('summary-content');
+    if (!el) return;
+    if (!data || data.error) { el.innerHTML = '<div class="empty-state">データがありません</div>'; return; }
+    const r = data;
+    el.innerHTML = `<div class="card"><div class="card-title">年度累積 成績</div>
+      <div style="display:flex;gap:16px;font-size:15px;font-weight:700;margin-bottom:8px;">
+        <span>勝：${r.wins||0}</span><span>負：${r.losses||0}</span><span>分：${r.draws||0}</span>
+      </div>
+      <div style="font-size:13px;color:var(--text-muted);">得点：${r.goals||0} / 失点：${r.conceded||0} / 得失点差：${(r.goals||0)-(r.conceded||0)}</div>
+      </div>`;
+  } catch(e) {
+    const el = document.getElementById('summary-content');
+    if (el) el.innerHTML = '<div class="empty-state">読み込み失敗</div>';
+  }
+}
+
 function openSettings() {
   document.getElementById('modal-settings').style.display = 'flex';
   updateMyFamilyDisplay();
@@ -1742,278 +1871,184 @@ function installApp() {
   deferredPrompt.userChoice.then(()=>{ deferredPrompt=null; document.getElementById('install-banner').style.display='none'; });
 }
 
-// ===== 初期化 =====
-window.onload = async () => {
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('report-date').value = reportMeta.date || today;
-  // GAS URLを確実にセット
-  if (!gasUrl) gasUrl = DEFAULT_GAS_URL;
-  localStorage.setItem('fc_gas_url', gasUrl);
-  document.getElementById('gas-url').value = gasUrl;
-  // 選手は常にローカルから先に読み込む（永続保存）
-  players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
-  renderPlayers();
-  try { await syncAll(); } catch(e) {}
-  // 初回訪問チェック
-  setTimeout(checkFirstVisit, 500);
-  // 常に自動同期を開始（syncAllが失敗しても必ず開始）
-  startAutoSync();
-  showToast('アプリ起動完了');
+
+// ===== 言語設定 =====
+var _lang = localStorage.getItem('fc_lang') || 'ja';
+var _i18n = {
+  ja: {
+    tab_report: '📋 試合',
+    tab_result: '🏆 試合結果',
+    tab_attendance: '📅 出欠確認',
+    tab_duty: '🔔 当番',
+    tab_summary: '📊 まとめ',
+    add_schedule: '＋ 日程追加',
+    archive: '📦 アーカイブ',
+    auto_sync: '自動同期: 5秒ごと',
+    synced: '同期済',
+    attend_legend: '<span id="att-legend">◯参加　●当番不可　△調整中　×不参加</span>',
+    setting_family: '自分の家族',
+    setting_family_desc: '出欠確認で自分の行だけ入力できます',
+    setting_select_family: '👤 家族を選択する',
+    setting_players: '⚽ 選手を登録',
+    setting_families: '👨‍👩‍👧 家族を登録',
+    setting_venues: '📍 場所を登録',
+    setting_matchnames: '📋 試合名を登録',
+    setting_lock: '🔒 出欠確認の締め切り',
+    setting_delete: '🗑 日程の一括削除',
+    setting_gas: '🔌 Google連携設定',
+    add_match: '＋ 試合を追加',
+    finish_match: '🏁 試合が終わったら押してください',
+    view_result: '🏆 試合結果を確認・共有',
+    family_not_set: '家族が設定されていません',
+    family_not_set_desc: '出欠確認を入力するにはまず家族を選択してください',
+    open_settings: '⚙️ 設定から家族を選択する',
+    no_schedule: '「＋ 日程追加」ボタンで日程を追加してください',
+    carpool_ok: '可能',
+    carpool_ng: '希望',
+    carpool_no: '不要',
+    carpool_capacity: '乗車可能人数',
+    carpool_players: '選手',
+    carpool_companions: '同伴',
+    lang: '🌐 言語 / Language',
+  },
+  en: {
+    tab_report: '📋 Match',
+    tab_result: '🏆 Results',
+    tab_attendance: '📅 Attendance',
+    tab_duty: '🔔 Duty',
+    tab_summary: '📊 Summary',
+    add_schedule: '＋ Add Schedule',
+    archive: '📦 Archive',
+    auto_sync: 'Auto sync: 5sec',
+    synced: 'Synced',
+    attend_legend: '◯Attend　●Attend/No duty　△Undecided　×Absent',
+    setting_lang: '🌐 Language',
+    setting_family: 'Your Family',
+    setting_family_desc: 'You can only edit your own row in attendance.',
+    setting_select_family: '👤 Select Family',
+    setting_players: '⚽ Register Players',
+    setting_families: '👨‍👩‍👧 Register Families',
+    setting_venues: '📍 Register Venues',
+    setting_matchnames: '📋 Register Match Names',
+    setting_lock: '🔒 Lock Attendance',
+    setting_lock_desc: 'Lock all schedules. After locking, ◯△× cannot be changed.',
+    setting_lock_btn: '🔒 Lock All',
+    setting_unlock_btn: '🔓 Unlock All',
+    setting_delete: '🗑 Delete All Schedules',
+    setting_delete_desc: 'Delete all schedules and attendance data.',
+    setting_delete_btn: '🗑 Delete All',
+    setting_gas: '🔌 Google Integration',
+    setting_gas_url: 'GAS URL',
+    setting_gas_test: '🔌 Test Connection',
+    setting_gas_guide: '📋 GAS Setup Guide',
+    setting_install: '📱 Add to Home Screen',
+    add_match: '＋ Add Match',
+    finish_match: '🏁 Press when match is over',
+    view_result: '🏆 View & Share Results',
+    family_not_set: 'Family not set',
+    family_not_set_desc: 'Please select your family to enter attendance.',
+    open_settings: '⚙️ Open Settings',
+    no_schedule: 'Add a schedule with the ＋ button.',
+    carpool_ok: 'Available',
+    carpool_ng: 'Request',
+    carpool_no: 'Not needed',
+    carpool_capacity: 'Capacity',
+    carpool_players: 'Players',
+    carpool_companions: 'Guests',
+    lang: '🌐 言語 / Language',
+    basic_info: 'Basic Info',
+    date: 'Date',
+    opponent: 'Opponent',
+    match_name: 'Match Name',
+    score: 'Score',
+    concede: 'Conceded',
+    scorer: 'Scorer',
+    first_half: 'H1',
+    second_half: 'H2',
+    pk: 'PK',
+    add_scorer_h1: '＋ H1',
+    add_scorer_h2: '＋ H2',
+    add_player: '＋ Add Player',
+    add_family: '＋ Add Family',
+    add_venue: '＋ Add Venue',
+    add_match_name: '＋ Add Match Name',
+    duty_assign: 'Duty Assignment',
+    duty_monthly: 'Monthly Duty Count',
+    select_year: 'Select Year',
+    yearly_record: 'Yearly Record',
+    wins: 'W', losses: 'L', draws: 'D',
+    goals: 'Goals', conceded_total: 'Conceded', diff: 'Diff',
+    top_scorers: 'Top Scorers',
+    share_line: '📤 Share on LINE',
+    carpool_header: 'Carpool',
+    attend_header: 'Attendance',
+  },
 };
 
-// ===== ユーティリティ =====
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 2500);
-}
-function showPage(name, btn) {
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.tab-bar button').forEach(b=>b.classList.remove('active'));
-  document.getElementById('page-'+name).classList.add('active');
-  if (btn) btn.classList.add('active');
-  if (name === 'summary') loadSummary();
-  if (name === 'result') renderResultPage();
-  if (name === 'attendance') { renderAttendancePage(); }
-  if (name === 'duty') renderDutyPage();
-}
-function saveReportMeta() {
-  const prevDate = reportMeta.date;
-  reportMeta.date = document.getElementById('report-date').value;
-  localStorage.setItem('fc_report_meta', JSON.stringify(reportMeta));
-  if (prevDate && prevDate !== reportMeta.date) {
-    if (confirm('日付が変わりました。試合データをリセットしますか？')) {
-      matches = [];
-      matchCounter = 0;
-      saveMatches();
-      renderAllMatches();
-      showToast('試合データをリセットしました');
-    }
-  }
+function t(key) {
+  return (_i18n[_lang] && _i18n[_lang][key]) || (_i18n['ja'] && _i18n['ja'][key]) || key;
 }
 
-// ===== GAS =====
-function saveGasUrl() {
-  gasUrl = document.getElementById('gas-url').value.trim();
-  localStorage.setItem('fc_gas_url', gasUrl);
+function setLang(lang) {
+  _lang = lang;
+  localStorage.setItem('fc_lang', lang);
+  applyLang();
+  renderAttendancePage();
 }
-async function gasReq(params) {
-  if (!gasUrl) throw new Error('URL未設定');
-  const url = gasUrl + '?' + new URLSearchParams(params);
-  const res = await fetch(url, { cache: 'no-store' });
-  return await res.json();
-}
-async function testConnection() {
-  if (!gasUrl) { showToast('URLを入力してください'); return; }
-  showToast('接続テスト中...');
-  try {
-    await gasReq({ action: 'getPlayers' });
-    setConnected(true);
-    showToast('✅ 接続成功！');
-    await syncAll();
-  } catch(e) {
-    setConnected(false);
-    showToast('❌ 失敗: ' + e.message);
-  }
-}
-function setConnected(ok) {
-  const b = document.getElementById('conn-badge');
-  b.className = ok ? 'conn-ok' : 'conn-ng';
-  b.textContent = ok ? '● 接続済み' : '● 未接続';
-  document.getElementById('sync-status').textContent = ok ? '接続済み ✓' : '未接続';
-}
-async function syncAll() {
-  if (!gasUrl) { showToast('❌ GAS未接続'); return; }
-  showToast('🔄 同期中...');
-  document.getElementById('sync-status').textContent = '同期中...';
-  // マスタデータを独立して取得
-  try {
-    await pullMasterFromCloud();
-    _parentsCache = null;
-    renderAttendancePage();
-    showToast('✅ 同期完了');
-  } catch(e) {
-    showToast('❌ マスタ取得失敗');
-  }
-  try {
-    const [p, m] = await Promise.all([
-      gasReq({action:'getPlayers'}),
-      gasReq({action:'getMatches'})
-    ]);
-    const gasPlayers = Array.isArray(p) ? p : [];
-    if (gasPlayers.length > 0) {
-      players = gasPlayers;
+
+function applyLang() {
+  var ja = _lang === 'ja';
+  var tabs = document.querySelectorAll('.tab-bar button');
+  if (tabs[0]) tabs[0].innerHTML = t('tab_report');
+  if (tabs[1]) tabs[1].innerHTML = t('tab_result');
+  if (tabs[2]) tabs[2].innerHTML = t('tab_attendance');
+  if (tabs[3]) tabs[3].innerHTML = t('tab_duty');
+  if (tabs[4]) tabs[4].innerHTML = t('tab_summary');
+  var legend = document.getElementById('att-legend');
+  if (legend) legend.textContent = t('attend_legend');
+  var initText = document.getElementById('sync-init-text');
+  if (initText) initText.textContent = t('auto_sync');
+  var btnAddSched = document.getElementById('btn-add-schedule');
+  if (btnAddSched) btnAddSched.textContent = t('add_schedule');
+  var btnArchive = document.getElementById('btn-archive');
+  if (btnArchive) btnArchive.textContent = t('archive');
+  var btnFinish = document.getElementById('btn-finish-match');
+  if (btnFinish) btnFinish.textContent = t('finish_match');
+  var btnResult = document.getElementById('btn-view-result');
+  if (btnResult) btnResult.textContent = t('view_result');
+  var idMap = {
+    'ct-my-family': ja ? '👤 自分の家族' : '👤 Your Family',
+    'ct-players':   ja ? '⚽ 選手を登録' : '⚽ Register Players',
+    'ct-families':  ja ? '👨‍👩‍👧 家族を登録' : '👨‍👩‍👧 Register Families',
+    'ct-venues':    ja ? '📍 場所を登録' : '📍 Register Venues',
+    'ct-matchnames':ja ? '📋 試合名を登録' : '📋 Register Match Names',
+    'ct-lock':      ja ? '🔒 出欠確認の締め切り' : '🔒 Lock Attendance',
+    'ct-delete':    ja ? '🗑 日程の一括削除' : '🗑 Delete All Schedules',
+    'ct-basic':     ja ? '基本情報' : 'Basic Info',
+  };
+  Object.keys(idMap).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = idMap[id];
+  });
+  var btnJa = document.getElementById('lang-btn-ja');
+  var btnEn = document.getElementById('lang-btn-en');
+  if (btnJa && btnEn) {
+    if (ja) {
+      btnJa.style.background='var(--green)'; btnJa.style.color='white'; btnJa.style.borderColor='var(--green)';
+      btnEn.style.background='white'; btnEn.style.color='#888'; btnEn.style.borderColor='#ddd';
     } else {
-      players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
+      btnEn.style.background='var(--green)'; btnEn.style.color='white'; btnEn.style.borderColor='var(--green)';
+      btnJa.style.background='white'; btnJa.style.color='#888'; btnJa.style.borderColor='#ddd';
     }
-    matches = Array.isArray(m) ? m : [];
-    matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
-    localStorage.setItem('fc_players_permanent', JSON.stringify(players));
-    localStorage.setItem('fc_players', JSON.stringify(players));
-    localStorage.setItem('fc_matches', JSON.stringify(matches));
-    setConnected(true);
-    renderPlayers();
-    renderAllMatches();
-  } catch(e) {
-    document.getElementById('sync-status').textContent = '同期失敗';
-    players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
-    matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
-    matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
-    renderPlayers();
-    renderAllMatches();
   }
 }
-async function savePlayers() {
-  // 選手は永続キーに保存（試合リセットの影響を受けない）
-  localStorage.setItem('fc_players_permanent', JSON.stringify(players));
-  localStorage.setItem('fc_players', JSON.stringify(players));
-  pushMasterToCloud(); // マスタ経由でも同期
-  if (!gasUrl) return;
-  try { await gasReq({action:'savePlayers', data:JSON.stringify(players)}); } catch(e){}
-}
-async function saveMatches() {
-  // 入力中はローカルのみ保存（クラウドは「試合が終わったら押してください」時のみ）
-  localStorage.setItem('fc_matches', JSON.stringify(matches));
-}
-async function saveMatchesToCloud() {
-  localStorage.setItem('fc_matches', JSON.stringify(matches));
-  if (!gasUrl) return;
-  try {
-    await gasReq({action:'saveMatches', data:JSON.stringify(matches)});
-    document.getElementById('sync-status').textContent = '保存済み ✓';
-  } catch(e) { showToast('⚠️ クラウド保存失敗（ローカルに保存）'); }
-}
-
-// ===== まとめにデータ追加 =====
-async function submitToSummary() {
-  if (!matches.length) { showToast('試合データがありません'); return; }
-  if (!gasUrl) { showToast('GASが未接続です'); return; }
-  let win=0, lose=0, draw=0, gf=0, ga=0;
-  const scorers = {};
-  matches.forEach(m => {
-    const k = totalK(m), o = totalO(m);
-    gf += k; ga += o;
-    if (k > o) win++;
-    else if (k < o) lose++;
-    else if (m.scores.pk_k + m.scores.pk_o > 0) { if (m.scores.pk_k > m.scores.pk_o) win++; else lose++; }
-    else draw++;
-    m.scorers.forEach(s => {
-      const p = players.find(p => p.id == s.playerId);
-      if (p) scorers[p.name] = (scorers[p.name]||0) + 1;
-    });
-  });
-  const date = document.getElementById('report-date').value;
-  const grade = reportMeta.grade || 'FC熊野';
-  const nendo = getNendo(date);
-  try {
-    await gasReq({ action:'addMatchRecord', data: JSON.stringify({nendo, date, grade, win, lose, draw, gf, ga, scorers}) });
-    showToast('✅ まとめに追加しました！');
-  } catch(e) { showToast('❌ 失敗: ' + e.message); }
-}
-
-// ===== まとめ読み込み =====
-async function loadSummary() {
-  if (!gasUrl) {
-    renderSummaryUI([]);
-    return;
-  }
-  try {
-    summaryData = await gasReq({action:'getSummary'});
-    if (!Array.isArray(summaryData)) summaryData = [];
-  } catch(e) { summaryData = []; }
-  renderSummaryUI(summaryData);
-}
-
-function renderSummaryUI(data) {
-  // 年度一覧
-  const nendos = [...new Set(data.map(d=>d.nendo))].sort((a,b)=>b-a);
-  if (!nendos.includes(selectedNendo)) selectedNendo = nendos[0] || getNendo();
-  const tabsEl = document.getElementById('nendo-tabs');
-  if (!nendos.length) {
-    tabsEl.innerHTML = `<span class="nendo-tab active">${getNendo()}年度</span>`;
-  } else {
-    tabsEl.innerHTML = nendos.map(n =>
-      `<button class="nendo-tab ${n==selectedNendo?'active':''}" onclick="selectNendo(${n},this)">${n}年度</button>`
-    ).join('');
-  }
-  const rows = data.filter(d => d.nendo == selectedNendo);
-  let win=0,lose=0,draw=0,gf=0,ga=0; const sm={};
-  rows.forEach(r => {
-    win+=parseInt(r.win)||0; lose+=parseInt(r.lose)||0; draw+=parseInt(r.draw)||0;
-    gf+=parseInt(r.gf)||0; ga+=parseInt(r.ga)||0;
-    Object.entries(r.scorers||{}).forEach(([n,c])=>{ sm[n]=(sm[n]||0)+parseInt(c); });
-  });
-  const rec = document.getElementById('summary-record');
-  if (!rows.length) {
-    rec.innerHTML='<div class="card-title">年度累積 成績</div><div class="empty-state">この年度のデータがありません</div>';
-  } else {
-    rec.innerHTML=`<div class="card-title">年度累積 成績（${selectedNendo}年度）</div>
-      <div style="text-align:center;padding:12px 0 16px;">
-        <span style="font-family:'Barlow Condensed',sans-serif;font-size:40px;font-weight:900;">
-          <span class="wc">${win}勝</span><span style="color:#444;font-size:26px;margin:0 5px;">-</span>
-          <span class="lc">${lose}敗</span><span style="color:#444;font-size:26px;margin:0 5px;">-</span>
-          <span class="dc">${draw}分</span>
-        </span>
-      </div>
-      <div class="summary-row"><span class="lbl">記録数</span><span class="val">${rows.length}回</span></div>
-      <div class="summary-row"><span class="lbl">総試合数</span><span class="val">${win+lose+draw}試合</span></div>
-      <div class="summary-row"><span class="lbl">総得点</span><span class="val wc">${gf}点</span></div>
-      <div class="summary-row"><span class="lbl">総失点</span><span class="val lc">${ga}点</span></div>
-      <div class="summary-row"><span class="lbl">得失点差</span><span class="val">${gf-ga>=0?'+':''}${gf-ga}</span></div>`;
-  }
-  const sc = document.getElementById('summary-scorers');
-  const sorted = Object.entries(sm).sort((a,b)=>b[1]-a[1]);
-  const mx = sorted[0]?.[1]||1;
-  if (!sorted.length) {
-    sc.innerHTML='<div class="card-title">年度累積 得点ランキング</div><div class="empty-state">得点データがありません</div>';
-  } else {
-    sc.innerHTML=`<div class="card-title">年度累積 得点ランキング（${selectedNendo}年度）</div>
-      <div style="margin-top:6px;">${sorted.map(([n,c],i)=>`
-        <div class="sbar-row">
-          <span class="sname">${i===0?'🥇':i===1?'🥈':i===2?'🥉':'　'} ${n}</span>
-          <div class="sbar"><div class="sbar-fill" style="width:${(c/mx)*100}%"></div></div>
-          <span class="scnt">${c}</span>
-        </div>`).join('')}</div>`;
-  }
-}
-function selectNendo(n, btn) {
-  selectedNendo = n;
-  document.querySelectorAll('.nendo-tab').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  renderSummaryUI(summaryData);
-}
-
-// ===== 選手 =====
-async function addPlayer() {
-  const name = document.getElementById('input-name').value.trim();
-  if (!name) { showToast('選手名を入力してください'); return; }
-  players.push({id: Date.now(), name});
-  await savePlayers();
-  document.getElementById('input-name').value = '';
-  renderPlayers();
-  showToast(name + ' を登録しました ✅');
-}
-async function removePlayer(id) {
-  players = players.filter(p=>p.id!==id);
-  await savePlayers(); renderPlayers(); renderAllMatches();
-}
-function renderPlayers() {
-  const el = document.getElementById('player-list');
-  if (!players.length) { el.innerHTML='<div class="empty-state">まだ選手が登録されていません</div>'; document.getElementById('player-count').textContent=''; return; }
-  el.innerHTML = '<div class="player-grid">' +
-    players.map(p=>`<div class="player-chip"><span>${p.name}</span><button onclick="removePlayer(${p.id})">✕</button></div>`).join('') + '</div>';
-  document.getElementById('player-count').textContent = `計 ${players.length} 名`;
-}
-
-// ===== 試合 =====
-function totalK(m) { return m.scores.h1_k + m.scores.h2_k; }
-function totalO(m) { return m.scores.h1_o + m.scores.h2_o; }
 
 async function addMatch() {
   matchCounter++;
   matches.push({
-    id: Date.now(), num: matchCounter, opponent: '', venue: '',
-    scores: { h1_k:0, h2_k:0, h1_o:0, h2_o:0, pk_k:0, pk_o:0 },
+    id: Date.now(), num: matchCounter,
+    opponent: '', venue: getMatchNames()[0] || '',
+    scores: {h1_k:0,h2_k:0,h1_o:0,h2_o:0,pk_k:0,pk_o:0},
     scorers: []
   });
   await saveMatches(); renderAllMatches();
