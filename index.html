@@ -352,8 +352,8 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
 
 <!-- ===== 設定モーダル ===== -->
 <!-- ===== 家族選択モーダル（初回） ===== -->
-<div id="modal-select-family" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:400;align-items:center;justify-content:center;">
-  <div style="background:white;border-radius:16px;padding:24px 20px;width:88%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+<div id="modal-select-family" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:400;align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
+  <div style="background:white;border-radius:16px;padding:24px 20px;width:88%;max-width:360px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
     <div style="text-align:center;margin-bottom:18px;">
       <div style="font-size:28px;margin-bottom:8px;">👋</div>
       <div style="font-size:18px;font-weight:700;color:var(--green);">あなたはどの家族ですか？</div>
@@ -370,21 +370,6 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       <button onclick="closeModal('modal-settings')" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:18px;border-radius:8px;padding:4px 10px;cursor:pointer;">✕</button>
     </div>
     <div style="padding:12px;">
-      <!-- 言語設定 -->
-      <div class="card">
-        <div class="card-title">🌐 言語 / Language</div>
-        <div style="display:flex;gap:10px;margin-top:8px;">
-          <button onclick="setLang('ja')" id="lang-btn-ja" style="flex:1;padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid var(--green);background:var(--green);color:white;">日本語</button>
-          <button onclick="setLang('en')" id="lang-btn-en" style="flex:1;padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid #ddd;background:white;color:#888;">English</button>
-        </div>
-      </div>
-      <!-- 自分の家族 -->
-      <div class="card" id="my-family-card" style="border:2px solid var(--green);">
-        <div class="card-title" id="ct-my-family">👤 自分の家族</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認で自分の行だけ入力できます<br><b>※出欠確認を使うには必ず選択してください</b></div>
-        <div id="my-family-display" style="font-size:16px;font-weight:700;margin-bottom:12px;"></div>
-        <button class="btn btn-primary btn-full" onclick="showFamilySelectModal()">👤 家族を選択する</button>
-      </div>
       <!-- 選手登録 -->
       <div class="card">
         <div class="card-title" id="ct-players">⚽ 選手を登録</div>
@@ -393,6 +378,22 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
         <button class="btn btn-primary btn-full" onclick="addPlayer()">＋ 選手を追加</button>
         <div id="player-list" style="margin-top:10px;"><div class="empty-state">まだ選手が登録されていません</div></div>
         <div style="font-size:12px;color:var(--text-muted);text-align:right;margin-top:6px;" id="player-count"></div>
+      </div>
+      <!-- 試合名マスタ -->
+      <div class="card">
+        <div class="card-title" id="ct-matchnames">📋 試合名を登録</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">試合カードの試合名プルダウンに表示されます</div>
+        <label>試合名</label>
+        <input type="text" id="input-match-name" placeholder="例: 練習試合・板橋区リーグ">
+        <button class="btn btn-primary btn-full" onclick="addMatchName()">＋ 試合名を追加</button>
+        <div id="match-name-list" style="margin-top:10px;"><div class="empty-state">まだ登録されていません</div></div>
+      </div>
+      <!-- 自分の家族 -->
+      <div class="card" id="my-family-card" style="border:2px solid var(--green);">
+        <div class="card-title" id="ct-my-family">👤 自分の家族</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認で自分の行だけ入力できます<br><b>※出欠確認を使うには必ず選択してください</b></div>
+        <div id="my-family-display" style="font-size:16px;font-weight:700;margin-bottom:12px;"></div>
+        <button class="btn btn-primary btn-full" onclick="showFamilySelectModal()">👤 家族を選択する</button>
       </div>
       <!-- 家族管理 -->
       <div class="card">
@@ -413,14 +414,32 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
         <button class="btn btn-primary btn-full" onclick="addVenueMaster()">＋ 場所を追加</button>
         <div id="venue-list" style="margin-top:10px;"><div class="empty-state">まだ登録されていません</div></div>
       </div>
-      <!-- 試合名マスタ -->
+      <!-- 出欠一括締め切り -->
       <div class="card">
-        <div class="card-title" id="ct-matchnames">📋 試合名を登録</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">試合カードの試合名プルダウンに表示されます</div>
-        <label>試合名</label>
-        <input type="text" id="input-match-name" placeholder="例: 練習試合・板橋区リーグ">
-        <button class="btn btn-primary btn-full" onclick="addMatchName()">＋ 試合名を追加</button>
-        <div id="match-name-list" style="margin-top:10px;"><div class="empty-state">まだ登録されていません</div></div>
+        <div class="card-title" id="ct-lock">🔒 出欠確認の締め切り</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">全日程の出欠入力を締め切ります。締め切り後は◯△×の変更ができなくなります。</div>
+        <button class="btn btn-full" onclick="lockAllSchedules()" style="background:#c0392b;color:white;font-weight:700;margin-bottom:8px;">🔒 全日程を締め切る</button>
+        <button class="btn btn-outline btn-full" onclick="unlockAllSchedules()">🔓 全日程のロックを解除</button>
+      </div>
+      <!-- 日程一括削除 -->
+      <div class="card">
+        <div class="card-title" id="ct-delete">🗑 日程の一括削除</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認タブのすべての日程カードを削除します。出欠データも合わせてリセットされます。</div>
+        <button type="button" class="btn btn-full" onclick="deleteAllSchedules()" style="background:#888;color:white;font-weight:700;border:none;cursor:pointer;">🗑 全日程を削除する</button>
+      </div>
+      <!-- アプリのリセット -->
+      <div class="card">
+        <div class="card-title">🔄 アプリのリセット</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">アプリの動作がおかしい時に押してください。端末のキャッシュデータを削除して、サーバーから最新データを取り直します。家族設定とGAS URLは保持されます。</div>
+        <button type="button" class="btn btn-full" onclick="resetApp()" style="background:#e74c3c;color:white;font-weight:700;border:none;cursor:pointer;">🔄 アプリをリセット</button>
+      </div>
+      <!-- 言語設定 -->
+      <div class="card">
+        <div class="card-title">🌐 言語 / Language</div>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+          <button onclick="setLang('ja')" id="lang-btn-ja" style="flex:1;padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid var(--green);background:var(--green);color:white;">日本語</button>
+          <button onclick="setLang('en')" id="lang-btn-en" style="flex:1;padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid #ddd;background:white;color:#888;">English</button>
+        </div>
       </div>
       <!-- Google連携 -->
       <div class="card">
@@ -440,25 +459,6 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
           <b>Android (Chrome)</b><br>
           画面上のバナー「追加する」または メニュー(⋮) → 「ホーム画面に追加」
         </div>
-      </div>
-      <!-- 出欠一括締め切り -->
-      <div class="card">
-        <div class="card-title" id="ct-lock">🔒 出欠確認の締め切り</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">全日程の出欠入力を締め切ります。締め切り後は◯△×の変更ができなくなります。</div>
-        <button class="btn btn-full" onclick="lockAllSchedules()" style="background:#c0392b;color:white;font-weight:700;margin-bottom:8px;">🔒 全日程を締め切る</button>
-        <button class="btn btn-outline btn-full" onclick="unlockAllSchedules()">🔓 全日程のロックを解除</button>
-      </div>
-      <!-- 日程一括削除 -->
-      <div class="card">
-        <div class="card-title" id="ct-delete">🗑 日程の一括削除</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認タブのすべての日程カードを削除します。出欠データも合わせてリセットされます。</div>
-        <button type="button" class="btn btn-full" onclick="deleteAllSchedules()" style="background:#888;color:white;font-weight:700;border:none;cursor:pointer;">🗑 全日程を削除する</button>
-      </div>
-      <!-- アプリのリセット -->
-      <div class="card">
-        <div class="card-title">🔄 アプリのリセット</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">アプリの動作がおかしい時に押してください。端末のキャッシュデータを削除して、サーバーから最新データを取り直します。家族設定とGAS URLは保持されます。</div>
-        <button type="button" class="btn btn-full" onclick="resetApp()" style="background:#e74c3c;color:white;font-weight:700;border:none;cursor:pointer;">🔄 アプリをリセット</button>
       </div>
       <!-- GAS手順 -->
       <div class="card">
