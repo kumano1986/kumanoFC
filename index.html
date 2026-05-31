@@ -1553,22 +1553,24 @@ async function submitToSummary() {
 }
 
 async function loadSummary() {
-  const nendoEl = document.getElementById('current-nendo');
-  const nendo = nendoEl ? nendoEl.value : selectedNendo;
-  const el = document.getElementById('summary-content');
-  if (!el) return;
-  el.innerHTML = '<div class="empty-state">読み込み中... (年度: '+nendo+')</div>';
+  const nendo = selectedNendo || getNendo();
+  const recordEl = document.getElementById('summary-record');
+  const scorersEl = document.getElementById('summary-scorers');
+  if (!recordEl || !scorersEl) return;
+
+  // 年度タブ表示
+  renderNendoTabs();
+
+  recordEl.innerHTML = '<div class="card-title">年度累積 成績</div><div class="empty-state">読み込み中...</div>';
+  scorersEl.innerHTML = '<div class="card-title">年度累積 得点ランキング</div><div class="empty-state">読み込み中...</div>';
+
   try {
     const data = await gasReq({action:'getSummary', nendo: nendo});
-    if (!Array.isArray(data)) {
-      el.innerHTML = '<div class="empty-state">レスポンス異常: ' + JSON.stringify(data).substring(0,100) + '</div>';
+    if (!Array.isArray(data) || data.length === 0) {
+      recordEl.innerHTML = '<div class="card-title">年度累積 成績</div><div class="empty-state">'+nendo+'年度のデータがありません</div>';
+      scorersEl.innerHTML = '<div class="card-title">年度累積 得点ランキング</div><div class="empty-state">得点データがありません</div>';
       return;
     }
-    if (data.length === 0) {
-      el.innerHTML = '<div class="empty-state">'+nendo+'年度のデータがありません</div>';
-      return;
-    }
-    // 集計
     let totalWin=0, totalLose=0, totalDraw=0, totalGF=0, totalGA=0;
     const totalScorers = {};
     data.forEach(function(r) {
@@ -1582,32 +1584,61 @@ async function loadSummary() {
       });
     });
     const diff = totalGF - totalGA;
-    // 得点ランキング
+    recordEl.innerHTML =
+      '<div class="card-title">📊 ' + nendo + '年度 累積成績</div>' +
+      '<div style="display:flex;gap:16px;font-size:17px;font-weight:700;margin-bottom:10px;justify-content:space-around;">' +
+        '<span style="color:#2d7a4f;">勝 '+totalWin+'</span>' +
+        '<span style="color:#e74c3c;">負 '+totalLose+'</span>' +
+        '<span style="color:#888;">分 '+totalDraw+'</span>' +
+      '</div>' +
+      '<div style="font-size:13px;color:var(--text-muted);text-align:center;">' +
+        '得点 '+totalGF+' / 失点 '+totalGA+' / 得失点差 '+(diff>=0?'+'+diff:diff) +
+      '</div>';
+
     const ranking = Object.entries(totalScorers)
       .filter(function(x){return x[1] > 0;})
       .sort(function(a,b){return b[1]-a[1];});
-    var rankHtml = ranking.length
-      ? '<div class="card" style="margin-top:10px;"><div class="card-title">🥇 得点ランキング</div>' +
+    if (ranking.length === 0) {
+      scorersEl.innerHTML = '<div class="card-title">年度累積 得点ランキング</div><div class="empty-state">得点データがありません</div>';
+    } else {
+      scorersEl.innerHTML = '<div class="card-title">🥇 ' + nendo + '年度 得点ランキング</div>' +
         ranking.map(function(x, i){
           var medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'　';
           return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:14px;"><span>'+medal+' '+x[0]+'</span><span style="font-weight:700;">'+x[1]+'点</span></div>';
-        }).join('') + '</div>'
-      : '';
-    el.innerHTML =
-      '<div class="card"><div class="card-title">📊 ' + nendo + '年度 累積成績</div>' +
-        '<div style="display:flex;gap:16px;font-size:17px;font-weight:700;margin-bottom:10px;justify-content:space-around;">' +
-          '<span style="color:#2d7a4f;">勝 '+totalWin+'</span>' +
-          '<span style="color:#e74c3c;">負 '+totalLose+'</span>' +
-          '<span style="color:#888;">分 '+totalDraw+'</span>' +
-        '</div>' +
-        '<div style="font-size:13px;color:var(--text-muted);text-align:center;">' +
-          '得点 '+totalGF+' / 失点 '+totalGA+' / 得失点差 '+(diff>=0?'+'+diff:diff) +
-        '</div>' +
-      '</div>' +
-      rankHtml;
+        }).join('');
+    }
   } catch(e) {
-    el.innerHTML = '<div class="empty-state">読み込み失敗: '+e.message+'</div>';
+    recordEl.innerHTML = '<div class="card-title">年度累積 成績</div><div class="empty-state">読み込み失敗: '+e.message+'</div>';
+    scorersEl.innerHTML = '<div class="card-title">年度累積 得点ランキング</div><div class="empty-state">読み込み失敗</div>';
   }
+}
+
+function renderNendoTabs() {
+  const el = document.getElementById('nendo-tabs');
+  if (!el) return;
+  const cur = getNendo();
+  const years = [cur-2, cur-1, cur, cur+1];
+  el.innerHTML = years.map(function(y) {
+    var active = y === (selectedNendo || cur);
+    return '<button class="nendo-tab" onclick="selectNendo('+y+', this)" style="padding:6px 14px;margin-right:6px;border-radius:6px;border:'+(active?'2px solid var(--green)':'1px solid #ddd')+';background:'+(active?'var(--green)':'white')+';color:'+(active?'white':'#666')+';font-size:13px;cursor:pointer;font-weight:'+(active?'700':'500')+';">'+y+'年度</button>';
+  }).join('');
+}
+
+function selectNendo(year, btn) {
+  selectedNendo = year;
+  document.querySelectorAll('.nendo-tab').forEach(function(b){
+    b.style.background = 'white';
+    b.style.color = '#666';
+    b.style.border = '1px solid #ddd';
+    b.style.fontWeight = '500';
+  });
+  if (btn) {
+    btn.style.background = 'var(--green)';
+    btn.style.color = 'white';
+    btn.style.border = '2px solid var(--green)';
+    btn.style.fontWeight = '700';
+  }
+  loadSummary();
 }
 
 function openSettings() {
