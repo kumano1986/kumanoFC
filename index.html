@@ -1233,14 +1233,19 @@ function addSchedule() {
   while (scheds.find(function(s){return s.id===id;})) { id = date+'_'+grade+'_'+n; n++; }
   scheds.push({id:id, date:date, grade:grade, venue:venue, note:note, carpool:carpool, archived:false, locked:false});
   scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
-  // 新しい日程の出欠・配車データを空に初期化（直接localStorageに書き込み）
+  // 現在の日程IDだけに絞り込む
+  var validIds = scheds.map(function(s){return s.id;});
   var attData = getAttendanceData();
-  attData[id] = {};
-  localStorage.setItem('fc_attendance2', JSON.stringify(attData));
-  gasReq({action:'saveAttendance', data:JSON.stringify(attData)}).catch(function(){});
+  var cleanAtt = {};
+  validIds.forEach(function(sid){ cleanAtt[sid] = attData[sid] || {}; });
+  cleanAtt[id] = {};
+  localStorage.setItem('fc_attendance2', JSON.stringify(cleanAtt));
+  gasReq({action:'saveAttendance', data:JSON.stringify(cleanAtt)}).catch(function(){});
   var cpData = getCarpoolData();
-  cpData[id] = {};
-  localStorage.setItem('fc_carpool', JSON.stringify(cpData));
+  var cleanCp = {};
+  validIds.forEach(function(sid){ cleanCp[sid] = cpData[sid] || {}; });
+  cleanCp[id] = {};
+  localStorage.setItem('fc_carpool', JSON.stringify(cleanCp));
   saveSchedules(scheds);
   closeModal('modal-add-schedule');
   renderAttendancePage();
