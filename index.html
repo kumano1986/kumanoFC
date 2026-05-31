@@ -454,6 +454,12 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認タブのすべての日程カードを削除します。出欠データも合わせてリセットされます。</div>
         <button type="button" class="btn btn-full" onclick="deleteAllSchedules()" style="background:#888;color:white;font-weight:700;border:none;cursor:pointer;">🗑 全日程を削除する</button>
       </div>
+      <!-- アプリのリセット -->
+      <div class="card">
+        <div class="card-title">🔄 アプリのリセット</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">アプリの動作がおかしい時に押してください。端末のキャッシュデータを削除して、サーバーから最新データを取り直します。家族設定とGAS URLは保持されます。</div>
+        <button type="button" class="btn btn-full" onclick="resetApp()" style="background:#e74c3c;color:white;font-weight:700;border:none;cursor:pointer;">🔄 アプリをリセット</button>
+      </div>
       <!-- GAS手順 -->
       <div class="card">
         <div class="card-title">GAS設定手順</div>
@@ -1157,6 +1163,24 @@ function unlockAllSchedules() {
   closeModal('modal-settings');
   renderAttendancePage();
   showToast('🔓 全日程のロックを解除しました');
+}
+
+function resetApp() {
+  if (!confirm('アプリをリセットします。\n\n・端末のキャッシュデータが削除されます\n・家族設定とGAS URLは保持されます\n・サーバーから最新データを再取得します\n\n実行しますか？')) return;
+  // 保護するキー
+  var keepKeys = ['fc_my_family', 'fc_gas_url', 'fc_lang', 'fc_data_version'];
+  var preserved = {};
+  keepKeys.forEach(function(k) {
+    var v = localStorage.getItem(k);
+    if (v !== null) preserved[k] = v;
+  });
+  // fc_で始まる全キー削除
+  var allKeys = Object.keys(localStorage).filter(function(k){return k.startsWith('fc_');});
+  allKeys.forEach(function(k){ localStorage.removeItem(k); });
+  // 復元
+  Object.keys(preserved).forEach(function(k){ localStorage.setItem(k, preserved[k]); });
+  showToast('✅ リセット完了。再読み込みします...');
+  setTimeout(function(){ location.reload(); }, 1000);
 }
 
 function deleteAllSchedules() {
@@ -2010,6 +2034,32 @@ function renderAttendancePage() {
 
 // ===== 状態 =====
 let players = [], matches = [], matchCounter = 0;
+
+// ===== データバージョン管理 =====
+const APP_DATA_VERSION = '20260601'; // 大きな仕様変更時にこの番号を上げる
+(function checkDataVersion() {
+  var savedVersion = localStorage.getItem('fc_data_version');
+  if (savedVersion !== APP_DATA_VERSION) {
+    // 古いデータをリセット（保護するキーは除く）
+    var keepKeys = ['fc_my_family', 'fc_gas_url', 'fc_lang'];
+    var preserved = {};
+    keepKeys.forEach(function(k) {
+      var v = localStorage.getItem(k);
+      if (v !== null) preserved[k] = v;
+    });
+    // localStorage全削除
+    var allKeys = Object.keys(localStorage).filter(function(k){return k.startsWith('fc_');});
+    allKeys.forEach(function(k){ localStorage.removeItem(k); });
+    // 保護したキーを復元
+    Object.keys(preserved).forEach(function(k){ localStorage.setItem(k, preserved[k]); });
+    // 新バージョン記録
+    localStorage.setItem('fc_data_version', APP_DATA_VERSION);
+    if (savedVersion) {
+      console.log('データを更新しました (v' + savedVersion + ' → v' + APP_DATA_VERSION + ')');
+    }
+  }
+})();
+
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwKOeBxmLG5agYpHwZFsItT_iCwMuAoW_S8SDm5N1-sLDRPskZ4naxbqQXhu-oxwyOlRA/exec';
 // 常にデフォルトURLで上書き（古いURLや空のURLを防ぐ）
 localStorage.setItem('fc_gas_url', DEFAULT_GAS_URL);
