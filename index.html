@@ -490,11 +490,8 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
     <button class="btn btn-outline" onclick="addMatch()">＋ 試合を追加</button>
   </div>
   <button class="btn btn-full" id="btn-finish-match" onclick="submitToSummary()" style="margin-top:8px;background:#e74c3c;color:white;font-weight:700;font-size:15px;padding:14px;border:none;border-radius:10px;cursor:pointer;">
-    🏁 試合が終わったら押してください
+    💾 試合結果を保存
   </button>
-  <div style="margin-top:8px;">
-    <button class="btn btn-share btn-full" onclick="showPage('result', document.querySelector('.tab-bar button:nth-child(2)'))" id="btn-view-result">🏆 試合結果を確認・共有</button>
-  </div>
 </div>
 
 <!-- ===== 試合結果 ===== -->
@@ -1522,17 +1519,36 @@ async function saveMatches() {
 async function submitToSummary() {
   if (!matches.length) { showToast('試合データがありません'); return; }
   if (!confirm('試合結果を確定してスプレッドシートに送信しますか？')) return;
-  const date = reportMeta.date;
+  const date = reportMeta.date || new Date().toISOString().split('T')[0];
+  const grade = reportMeta.grade || 'FC熊野';
+  const nendo = getNendo(date);
+
+  // 全試合の集計
+  let win = 0, lose = 0, draw = 0, gf = 0, ga = 0;
+  const scorers = {};
+  for (const m of matches) {
+    const k = totalK(m), o = totalO(m);
+    gf += k; ga += o;
+    if (k > o) win++;
+    else if (k < o) lose++;
+    else draw++;
+    // 得点者集計
+    (m.scorers || []).forEach(function(s) {
+      const p = players.find(function(x){ return x.id === s.playerId; });
+      if (p) scorers[p.name] = (scorers[p.name] || 0) + 1;
+    });
+  }
+
   try {
-    for (const m of matches) {
-      await gasReq({
-        action: 'addMatchRecord',
-        data: JSON.stringify({date, match:m, players})
-      });
-    }
-    showToast('✅ 試合結果を送信しました');
+    await gasReq({
+      action: 'addMatchRecord',
+      data: JSON.stringify({nendo, date, grade, win, lose, draw, gf, ga, scorers})
+    });
+    // 試合データもクラウドに保存
+    await gasReq({action:'saveMatches', data:JSON.stringify(matches)}).catch(function(){});
+    showToast('✅ スプレッドシートに保存しました');
   } catch(e) {
-    showToast('❌ 送信失敗: ' + e.message);
+    showToast('❌ 保存失敗: ' + e.message);
   }
 }
 
@@ -1964,7 +1980,7 @@ var _i18n = {
     setting_delete: '🗑 日程の一括削除',
     setting_gas: '🔌 Google連携設定',
     add_match: '＋ 試合を追加',
-    finish_match: '🏁 試合が終わったら押してください',
+    finish_match: '💾 試合結果を保存',
     view_result: '🏆 試合結果を確認・共有',
     family_not_set: '家族が設定されていません',
     family_not_set_desc: '出欠確認を入力するにはまず家族を選択してください',
@@ -2047,7 +2063,7 @@ var _i18n = {
     setting_gas_guide: '📋 GAS Setup Guide',
     setting_install: '📱 Add to Home Screen',
     add_match: '＋ Add Match',
-    finish_match: '🏁 Press when match is over',
+    finish_match: '💾 Save Match Results',
     view_result: '🏆 View & Share Results',
     family_not_set: 'Family not set',
     family_not_set_desc: 'Please select your family to enter attendance.',
