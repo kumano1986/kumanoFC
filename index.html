@@ -1554,22 +1554,55 @@ async function submitToSummary() {
 
 async function loadSummary() {
   const nendoEl = document.getElementById('current-nendo');
-  const nendo = nendoEl ? nendoEl.value : new Date().getFullYear();
+  const nendo = nendoEl ? nendoEl.value : selectedNendo;
+  const el = document.getElementById('summary-content');
+  if (!el) return;
+  el.innerHTML = '<div class="empty-state">読み込み中...</div>';
   try {
     const data = await gasReq({action:'getSummary', nendo});
-    const el = document.getElementById('summary-content');
-    if (!el) return;
-    if (!data || data.error) { el.innerHTML = '<div class="empty-state">データがありません</div>'; return; }
-    const r = data;
-    el.innerHTML = `<div class="card"><div class="card-title">年度累積 成績</div>
-      <div style="display:flex;gap:16px;font-size:15px;font-weight:700;margin-bottom:8px;">
-        <span>勝：${r.wins||0}</span><span>負：${r.losses||0}</span><span>分：${r.draws||0}</span>
-      </div>
-      <div style="font-size:13px;color:var(--text-muted);">得点：${r.goals||0} / 失点：${r.conceded||0} / 得失点差：${(r.goals||0)-(r.conceded||0)}</div>
-      </div>`;
+    if (!Array.isArray(data) || data.length === 0) {
+      el.innerHTML = '<div class="empty-state">データがありません</div>';
+      return;
+    }
+    // 集計
+    let totalWin=0, totalLose=0, totalDraw=0, totalGF=0, totalGA=0;
+    const totalScorers = {};
+    data.forEach(function(r) {
+      totalWin  += parseInt(r.win)  || 0;
+      totalLose += parseInt(r.lose) || 0;
+      totalDraw += parseInt(r.draw) || 0;
+      totalGF   += parseInt(r.gf)   || 0;
+      totalGA   += parseInt(r.ga)   || 0;
+      Object.keys(r.scorers || {}).forEach(function(name) {
+        totalScorers[name] = (totalScorers[name] || 0) + (parseInt(r.scorers[name]) || 0);
+      });
+    });
+    const diff = totalGF - totalGA;
+    // 得点ランキング
+    const ranking = Object.entries(totalScorers)
+      .filter(function(x){return x[1] > 0;})
+      .sort(function(a,b){return b[1]-a[1];});
+    var rankHtml = ranking.length
+      ? '<div class="card" style="margin-top:10px;"><div class="card-title">🥇 得点ランキング</div>' +
+        ranking.map(function(x, i){
+          var medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'　';
+          return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:14px;"><span>'+medal+' '+x[0]+'</span><span style="font-weight:700;">'+x[1]+'点</span></div>';
+        }).join('') + '</div>'
+      : '';
+    el.innerHTML =
+      '<div class="card"><div class="card-title">📊 ' + nendo + '年度 累積成績</div>' +
+        '<div style="display:flex;gap:16px;font-size:17px;font-weight:700;margin-bottom:10px;justify-content:space-around;">' +
+          '<span style="color:#2d7a4f;">勝 '+totalWin+'</span>' +
+          '<span style="color:#e74c3c;">負 '+totalLose+'</span>' +
+          '<span style="color:#888;">分 '+totalDraw+'</span>' +
+        '</div>' +
+        '<div style="font-size:13px;color:var(--text-muted);text-align:center;">' +
+          '得点 '+totalGF+' / 失点 '+totalGA+' / 得失点差 '+(diff>=0?'+'+diff:diff) +
+        '</div>' +
+      '</div>' +
+      rankHtml;
   } catch(e) {
-    const el = document.getElementById('summary-content');
-    if (el) el.innerHTML = '<div class="empty-state">読み込み失敗</div>';
+    el.innerHTML = '<div class="empty-state">読み込み失敗: '+e.message+'</div>';
   }
 }
 
