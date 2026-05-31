@@ -1261,7 +1261,7 @@ function addSchedule() {
   // 同じIDがあれば連番で回避
   var n = 2;
   while (scheds.find(function(s){return s.id===id;})) { id = date+'_'+grade+'_'+n; n++; }
-  scheds.push({id:id, date:date, grade:grade, venue:venue, note:note, carpool:carpool, archived:false, locked:false});
+  scheds.push({id:id, date:date, grade:grade, venue:venue, note:note, carpool:carpool, archived:false, locked:false, _createdAt: Date.now()});
   scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
   // 現在の日程IDだけに絞り込む
   var validIds = scheds.map(function(s){return s.id;});
@@ -1777,17 +1777,19 @@ function startAutoSync() {
         var cur = localStorage.getItem('fc_schedules') || '[]';
         var nw = JSON.stringify(master.schedules);
         if (cur !== nw) {
-          // ローカルにあってクラウドにない日程はマージ（自分が追加したばかりの可能性）
           var localScheds = JSON.parse(cur);
           var cloudIds = master.schedules.map(function(s){return s.id;});
-          var localOnly = localScheds.filter(function(s){ return cloudIds.indexOf(s.id) < 0; });
+          var nowMs = Date.now();
+          // ローカル独自分のうち、追加から30秒以内のものだけ保護
+          var localOnly = localScheds.filter(function(s){
+            return cloudIds.indexOf(s.id) < 0 &&
+                   s._createdAt && (nowMs - s._createdAt) < 30000;
+          });
           if (localOnly.length > 0) {
-            // ローカル独自分とクラウドをマージ
             var merged = master.schedules.concat(localOnly);
             merged.sort(function(a,b){ return a.date.localeCompare(b.date); });
             localStorage.setItem('fc_schedules', JSON.stringify(merged));
           } else {
-            // ローカル独自分なし → クラウドで上書き（削除を反映）
             localStorage.setItem('fc_schedules', nw);
           }
           masterChanged = true;
