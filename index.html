@@ -521,9 +521,9 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
 <div id="page-attendance" class="page">
   <!-- コントロールバー -->
   <div class="card" style="padding:12px 14px;">
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <button class="btn btn-primary btn-sm" onclick="showAddScheduleModal()" style="flex:1;" id="btn-add-schedule">＋ 日程追加</button>
-      <button class="btn btn-outline btn-sm" onclick="showArchiveModal()" style="flex:1;" id="btn-archive">📦 アーカイブ</button>
+    <button class="btn btn-primary btn-sm btn-full" onclick="showAddScheduleModal()" id="btn-add-schedule" style="margin-bottom:8px;">＋ 日程追加</button>
+    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:#7a5d00;font-weight:700;text-align:center;">
+      ⚠️ 押した後に反映されるまで数秒かかることがあります
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <div id="att-my-family-badge" style="font-size:12px;font-weight:700;color:var(--green);"></div>
