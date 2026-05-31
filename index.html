@@ -1488,7 +1488,7 @@ function renderPlayers() {
 }
 
 async function addPlayer() {
-  const inp = document.getElementById('input-player');
+  const inp = document.getElementById('input-name');
   const name = inp.value.trim();
   if (!name) { showToast('選手名を入力してください'); return; }
   if (players.some(p=>p.name===name)) { showToast('すでに登録されています'); return; }
@@ -2436,7 +2436,7 @@ async function shareResult() {
   const grade = reportMeta.grade || 'FC熊野';
   const text = buildShareText(date, grade);
   if (navigator.share) {
-    try { await navigator.share({title:`FC熊野 ${grade} 試合結果`, text}); return; } catch(e){}
+    try { await navigator.share({title:`FC熊野 試合結果`, text}); return; } catch(e){}
   }
   try {
     await navigator.clipboard.writeText(text);
@@ -2451,7 +2451,7 @@ async function sharePDF() {
   const grade = reportMeta.grade || 'FC熊野';
   const text = buildShareText(date, grade);
   if (navigator.share) {
-    try { await navigator.share({title:`FC熊野 ${grade} 試合結果`, text}); return; } catch(e){}
+    try { await navigator.share({title:`FC熊野 試合結果`, text}); return; } catch(e){}
   }
   try {
     await navigator.clipboard.writeText(text);
@@ -2459,7 +2459,7 @@ async function sharePDF() {
   } catch(e) { window.print(); }
 }
 function buildShareText(date, grade) {
-  let txt = `⚽ FC熊野 ${grade} 試合結果\n📅 ${date}\n${'─'.repeat(20)}\n`;
+  let txt = `⚽ FC熊野 試合結果\n📅 ${date}\n${'─'.repeat(20)}\n`;
   matches.forEach(m => {
     const k=totalK(m), o=totalO(m);
     const res = k>o?'✅勝利':k<o?'❌敗北':'🤝引き分け';
