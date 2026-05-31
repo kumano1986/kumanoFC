@@ -915,9 +915,15 @@ function getAttendanceData() {
   return JSON.parse(localStorage.getItem('fc_attendance2') || '{}');
 }
 function saveAttendanceData(d) {
-  localStorage.setItem('fc_attendance2', JSON.stringify(d));
+  // 現在存在する日程IDだけに絞り込む
+  var validIds = getSchedules().map(function(s){return s.id;});
+  var cleaned = {};
+  validIds.forEach(function(sid){
+    if (d[sid] !== undefined) cleaned[sid] = d[sid];
+  });
+  localStorage.setItem('fc_attendance2', JSON.stringify(cleaned));
   if (typeof gasUrl !== 'undefined' && gasUrl) {
-    gasReq({action:'saveAttendance', data:JSON.stringify(d)}).catch(function(){});
+    gasReq({action:'saveAttendance', data:JSON.stringify(cleaned)}).catch(function(){});
   }
 }
 
