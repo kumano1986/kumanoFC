@@ -1557,11 +1557,15 @@ async function loadSummary() {
   const nendo = nendoEl ? nendoEl.value : selectedNendo;
   const el = document.getElementById('summary-content');
   if (!el) return;
-  el.innerHTML = '<div class="empty-state">読み込み中...</div>';
+  el.innerHTML = '<div class="empty-state">読み込み中... (年度: '+nendo+')</div>';
   try {
-    const data = await gasReq({action:'getSummary', nendo});
-    if (!Array.isArray(data) || data.length === 0) {
-      el.innerHTML = '<div class="empty-state">データがありません</div>';
+    const data = await gasReq({action:'getSummary', nendo: nendo});
+    if (!Array.isArray(data)) {
+      el.innerHTML = '<div class="empty-state">レスポンス異常: ' + JSON.stringify(data).substring(0,100) + '</div>';
+      return;
+    }
+    if (data.length === 0) {
+      el.innerHTML = '<div class="empty-state">'+nendo+'年度のデータがありません</div>';
       return;
     }
     // 集計
