@@ -1753,7 +1753,19 @@ function startAutoSync() {
         var cur = localStorage.getItem('fc_schedules') || '[]';
         var nw = JSON.stringify(master.schedules);
         if (cur !== nw) {
-          localStorage.setItem('fc_schedules', nw);
+          // ローカルにあってクラウドにない日程はマージ（自分が追加したばかりの可能性）
+          var localScheds = JSON.parse(cur);
+          var cloudIds = master.schedules.map(function(s){return s.id;});
+          var localOnly = localScheds.filter(function(s){ return cloudIds.indexOf(s.id) < 0; });
+          if (localOnly.length > 0) {
+            // ローカル独自分とクラウドをマージ
+            var merged = master.schedules.concat(localOnly);
+            merged.sort(function(a,b){ return a.date.localeCompare(b.date); });
+            localStorage.setItem('fc_schedules', JSON.stringify(merged));
+          } else {
+            // ローカル独自分なし → クラウドで上書き（削除を反映）
+            localStorage.setItem('fc_schedules', nw);
+          }
           masterChanged = true;
         }
       }
