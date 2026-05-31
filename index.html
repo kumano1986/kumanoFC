@@ -1617,7 +1617,11 @@ function renderNendoTabs() {
   const el = document.getElementById('nendo-tabs');
   if (!el) return;
   const cur = getNendo();
-  const years = [cur-2, cur-1, cur, cur+1];
+  // 2026年度から現在年度まで表示
+  const startYear = 2026;
+  const endYear = Math.max(cur, startYear);
+  const years = [];
+  for (var y = startYear; y <= endYear; y++) years.push(y);
   el.innerHTML = years.map(function(y) {
     var active = y === (selectedNendo || cur);
     return '<button class="nendo-tab" onclick="selectNendo('+y+', this)" style="padding:6px 14px;margin-right:6px;border-radius:6px;border:'+(active?'2px solid var(--green)':'1px solid #ddd')+';background:'+(active?'var(--green)':'white')+';color:'+(active?'white':'#666')+';font-size:13px;cursor:pointer;font-weight:'+(active?'700':'500')+';">'+y+'年度</button>';
