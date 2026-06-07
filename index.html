@@ -1486,7 +1486,7 @@ async function syncAll() {
     } else {
       players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
     }
-    matches = Array.isArray(m) ? m : [];
+    matches = Array.isArray(m) && m.length > 0 ? m : JSON.parse(localStorage.getItem('fc_matches') || '[]');
     matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
     localStorage.setItem('fc_players_permanent', JSON.stringify(players));
     localStorage.setItem('fc_players', JSON.stringify(players));
