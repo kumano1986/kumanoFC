@@ -2839,8 +2839,12 @@ window.onload = async () => {
   localStorage.setItem('fc_gas_url', gasUrl);
   const urlEl = document.getElementById('gas-url');
   if (urlEl) urlEl.value = gasUrl;
+  // 起動時にローカルから即座に読み込み（試合データはローカル優先）
   players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
+  matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
+  matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
   renderPlayers();
+  renderAllMatches();
   try { await syncAll(); } catch(e) {}
   setTimeout(checkFirstVisit, 500);
   startAutoSync();
