@@ -1476,21 +1476,18 @@ async function syncAll() {
     renderAttendancePage();
   }).catch(function(){});
   try {
-    const [p, m] = await Promise.all([
-      gasReq({action:'getPlayers'}),
-      gasReq({action:'getMatches'})
-    ]);
+    const p = await gasReq({action:'getPlayers'});
     const gasPlayers = Array.isArray(p) ? p : [];
     if (gasPlayers.length > 0) {
       players = gasPlayers;
     } else {
       players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
     }
-    matches = Array.isArray(m) && m.length > 0 ? m : JSON.parse(localStorage.getItem('fc_matches') || '[]');
-    matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
     localStorage.setItem('fc_players_permanent', JSON.stringify(players));
     localStorage.setItem('fc_players', JSON.stringify(players));
-    localStorage.setItem('fc_matches', JSON.stringify(matches));
+    // 試合データは常にローカル優先（アプリリセット時のみクリア）
+    matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
+    matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
     setConnected(true);
     renderPlayers();
     renderAllMatches();
