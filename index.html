@@ -398,7 +398,7 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       <!-- 家族管理 -->
       <div class="card">
         <div class="card-title" id="ct-families">👨‍👩‍👧 家族を登録</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">出欠確認・当番で使用する家族名を管理します</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">出欠確認・当番で使用する家族名を管理します。各家族の選手人数を設定すると、出欠の「参加選手◯名」に反映されます。</div>
         <label>家族名</label>
         <input type="text" id="input-family" placeholder="例: 田中">
         <button class="btn btn-primary btn-full" onclick="addFamily()">＋ 家族を追加</button>
@@ -761,12 +761,39 @@ function renderFamilies() {
     document.getElementById('family-count').textContent = '';
     return;
   }
-  el.innerHTML = '<div class="player-chips">' +
-    arr.map(function(name) {
-      return '<div class="player-chip"><span>' + name + '</span>' +
-        '<button onclick="removeFamily(\'' + name + '\')">✕</button></div>';
+  var famPlayers = getFamilyPlayers();
+  el.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px;">' +
+    arr.map(function(name, idx) {
+      var cur = famPlayers[name] !== undefined ? famPlayers[name] : 1;
+      var opts = '';
+      for (var i=1;i<=9;i++) opts += '<option value="'+i+'"'+(String(cur)===String(i)?' selected':'')+'>'+i+'名</option>';
+      var upBtn = '<button onclick="moveFamily('+idx+',-1)" style="background:none;border:none;color:'+(idx===0?'#ddd':'#888')+';cursor:'+(idx===0?'default':'pointer')+';font-size:14px;padding:2px 4px;line-height:1;"'+(idx===0?' disabled':'')+'>▲</button>';
+      var downBtn = '<button onclick="moveFamily('+idx+',1)" style="background:none;border:none;color:'+(idx===arr.length-1?'#ddd':'#888')+';cursor:'+(idx===arr.length-1?'default':'pointer')+';font-size:14px;padding:2px 4px;line-height:1;"'+(idx===arr.length-1?' disabled':'')+'>▼</button>';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--accent-light);border:1px solid var(--accent-border);border-radius:8px;padding:8px 12px;">' +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+          '<div style="display:flex;flex-direction:column;">' + upBtn + downBtn + '</div>' +
+          '<span style="font-size:14px;font-weight:600;color:var(--text);">' + name + '</span>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span style="font-size:11px;color:var(--text-muted);">選手</span>' +
+          '<select class="family-players-sel" data-name="'+name+'" style="font-size:13px;padding:4px 6px;border:1.5px solid var(--green);border-radius:6px;background:white;margin:0;">'+opts+'</select>' +
+          '<button onclick="removeFamily(\'' + name + '\')" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:15px;padding:2px 4px;">✕</button>' +
+        '</div>' +
+      '</div>';
     }).join('') + '</div>';
   document.getElementById('family-count').textContent = '計 ' + arr.length + ' 家族';
+}
+
+function moveFamily(idx, dir) {
+  var arr = getParents();
+  var newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= arr.length) return;
+  var tmp = arr[idx];
+  arr[idx] = arr[newIdx];
+  arr[newIdx] = tmp;
+  saveParents(arr);
+  renderFamilies();
+  renderAttendancePage();
 }
 
 // ===== 試合名マスタ =====
@@ -938,6 +965,20 @@ function getCarpoolData() {
   return JSON.parse(localStorage.getItem('fc_carpool') || '{}');
 }
 function saveCarpoolData(d) { localStorage.setItem('fc_carpool', JSON.stringify(d)); pushMasterToCloud(); }
+
+// 家族ごとの選手人数（家族名 -> 人数）
+function getFamilyPlayers() {
+  return JSON.parse(localStorage.getItem('fc_family_players') || '{}');
+}
+function saveFamilyPlayers(d) {
+  localStorage.setItem('fc_family_players', JSON.stringify(d));
+  pushMasterToCloud();
+}
+function setFamilyPlayers(name, num) {
+  var d = getFamilyPlayers();
+  d[name] = parseInt(num) || 1;
+  saveFamilyPlayers(d);
+}
 
 // 確定データ
 function getConfirmedData() {
@@ -1723,6 +1764,7 @@ function pushMasterToCloud() {
       matchNames: JSON.parse(localStorage.getItem('fc_match_names') || '[]'),
       carpool:    JSON.parse(localStorage.getItem('fc_carpool') || '{}'),
       duty:       JSON.parse(localStorage.getItem('fc_duty') || '{}'),
+      attPlayers: JSON.parse(localStorage.getItem('fc_family_players') || '{}'),
       players:    JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]')
     };
     gasReq({action: 'saveMaster', data: JSON.stringify(master)})
@@ -1747,6 +1789,7 @@ async function pullMasterFromCloud() {
     if (Array.isArray(master.matchNames)) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
     if (master.carpool && typeof master.carpool === 'object') { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
     if (master.duty    && typeof master.duty    === 'object') { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
+    if (master.attPlayers && typeof master.attPlayers === 'object') { localStorage.setItem('fc_family_players', JSON.stringify(master.attPlayers)); }
   } catch(e) {}
 }
 
@@ -1805,6 +1848,11 @@ function startAutoSync() {
         if (curCp !== nwCp) { localStorage.setItem('fc_carpool', nwCp); masterChanged = true; }
       }
       if (master.duty && typeof master.duty==='object') localStorage.setItem('fc_duty', JSON.stringify(master.duty));
+      if (master.attPlayers && typeof master.attPlayers==='object') {
+        var curAp = localStorage.getItem('fc_family_players') || '{}';
+        var nwAp = JSON.stringify(master.attPlayers);
+        if (curAp !== nwAp) { localStorage.setItem('fc_family_players', nwAp); masterChanged = true; }
+      }
       if (masterChanged) { _parentsCache = null; renderAttendancePage(); }
     }).catch(function(){});
     // 出欠データ同期
@@ -1866,6 +1914,9 @@ async function loadAttendanceFromCloud() {
 
 function renderAttendancePage() {
   var myFamily = getMyFamily();
+  // 日程追加ボタンは★付き家族（管理者）のみ表示
+  var btnAdd = document.getElementById('btn-add-schedule');
+  if (btnAdd) btnAdd.style.display = isAdmin() ? '' : 'none';
   // 自分の家族バッジを更新
   var badge = document.getElementById('att-my-family-badge');
   if (badge) {
@@ -1910,6 +1961,14 @@ function renderAttendancePage() {
     var wd = weekdays[dateObj.getDay()];
     var dateLabel = s.date.replace(/^2026-/,'').replace(/-/,'/') + '(' + wd + ')';
     var maru = parents.filter(function(p){return att[p]==='◯'||att[p]==='●';}).length;
+    // 参加選手の合計（◯または●の家族の設定人数を合算）
+    var famPlayers = getFamilyPlayers();
+    var totalPlayers = 0;
+    parents.forEach(function(p){
+      if (att[p]==='◯'||att[p]==='●') {
+        totalPlayers += (famPlayers[p] !== undefined ? parseInt(famPlayers[p]) : 1);
+      }
+    });
 
     var dutyData = getDutyData();
     var assigned = dutyData[s.id] || '';
@@ -2013,7 +2072,7 @@ function renderAttendancePage() {
             (s.note ? '<div style="font-size:11px;color:var(--red);">' + s.note + '</div>' : '') +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:6px;">' +
-            '<div style="font-size:13px;font-weight:700;color:var(--green);white-space:nowrap;">◯ ' + maru + '名</div>' +
+            '<div style="font-size:13px;font-weight:700;color:var(--green);white-space:nowrap;">参加選手 ' + totalPlayers + '名</div>' +
             (isAdmin() ? '<button class="edit-sched-btn" data-sid="'+s.id+'" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;font-size:13px;cursor:pointer;padding:2px 7px;">✏️</button>' : '') +
             (isAdmin()
               ? '<button class="carpool-toggle-btn" data-sid="'+s.id+'" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;border:none;cursor:pointer;'+(s.carpool?'background:#fff3cd;color:#b7950b;':'background:#f0f0f0;color:#888;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</button>'
@@ -2035,7 +2094,7 @@ function renderAttendancePage() {
 let players = [], matches = [], matchCounter = 0;
 
 // ===== データバージョン管理 =====
-const APP_DATA_VERSION = '20260601'; // 大きな仕様変更時にこの番号を上げる
+const APP_DATA_VERSION = '20260627'; // 大きな仕様変更時にこの番号を上げる
 (function checkDataVersion() {
   var savedVersion = localStorage.getItem('fc_data_version');
   if (savedVersion !== APP_DATA_VERSION) {
@@ -2827,7 +2886,9 @@ document.addEventListener('change', function(e) {
   var ds = e.target.closest('.cp-drive-sel');
   if (ds) { setCarpoolDrive(ds.dataset.sid, ds.dataset.parent, ds.value); return; }
   var cn = e.target.closest('.cp-num');
-  if (cn) { setCarpoolNum(cn.dataset.sid, cn.dataset.parent, cn.dataset.field, cn.value); }
+  if (cn) { setCarpoolNum(cn.dataset.sid, cn.dataset.parent, cn.dataset.field, cn.value); return; }
+  var fp = e.target.closest('.family-players-sel');
+  if (fp) { setFamilyPlayers(fp.dataset.name, fp.value); renderFamilies(); }
 });
 
 // ===== 初期化 =====
