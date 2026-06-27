@@ -762,16 +762,15 @@ function renderFamilies() {
     return;
   }
   var famPlayers = getFamilyPlayers();
-  el.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px;">' +
+  el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">≡ を長押ししてドラッグすると順番を入れ替えられます</div>' +
+    '<div id="family-drag-list" style="display:flex;flex-direction:column;gap:8px;">' +
     arr.map(function(name, idx) {
       var cur = famPlayers[name] !== undefined ? famPlayers[name] : 1;
       var opts = '';
       for (var i=1;i<=9;i++) opts += '<option value="'+i+'"'+(String(cur)===String(i)?' selected':'')+'>'+i+'名</option>';
-      var upBtn = '<button onclick="moveFamily('+idx+',-1)" style="background:none;border:none;color:'+(idx===0?'#ddd':'#888')+';cursor:'+(idx===0?'default':'pointer')+';font-size:14px;padding:2px 4px;line-height:1;"'+(idx===0?' disabled':'')+'>▲</button>';
-      var downBtn = '<button onclick="moveFamily('+idx+',1)" style="background:none;border:none;color:'+(idx===arr.length-1?'#ddd':'#888')+';cursor:'+(idx===arr.length-1?'default':'pointer')+';font-size:14px;padding:2px 4px;line-height:1;"'+(idx===arr.length-1?' disabled':'')+'>▼</button>';
-      return '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--accent-light);border:1px solid var(--accent-border);border-radius:8px;padding:8px 12px;">' +
-        '<div style="display:flex;align-items:center;gap:6px;">' +
-          '<div style="display:flex;flex-direction:column;">' + upBtn + downBtn + '</div>' +
+      return '<div class="family-row" data-idx="'+idx+'" data-name="'+name+'" style="display:flex;align-items:center;justify-content:space-between;background:var(--accent-light);border:1px solid var(--accent-border);border-radius:8px;padding:8px 12px;touch-action:none;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span class="drag-handle" style="cursor:grab;color:#999;font-size:18px;padding:4px 6px;touch-action:none;user-select:none;-webkit-user-select:none;">≡</span>' +
           '<span style="font-size:14px;font-weight:600;color:var(--text);">' + name + '</span>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
@@ -782,6 +781,7 @@ function renderFamilies() {
       '</div>';
     }).join('') + '</div>';
   document.getElementById('family-count').textContent = '計 ' + arr.length + ' 家族';
+  setupFamilyDrag();
 }
 
 function moveFamily(idx, dir) {
@@ -794,6 +794,105 @@ function moveFamily(idx, dir) {
   saveParents(arr);
   renderFamilies();
   renderAttendancePage();
+}
+
+// ===== 汎用ドラッグ&ドロップ並び替え =====
+var _dragState = null;
+function setupFamilyDrag() {
+  setupDragList('family-drag-list', '.family-row', 'family', 8);
+}
+
+function setupDragList(listId, rowSelector, kind, gap) {
+  var list = document.getElementById(listId);
+  if (!list) return;
+  var handles = list.querySelectorAll('.drag-handle');
+  handles.forEach(function(handle) {
+    handle.addEventListener('touchstart', function(e){ onDragStart(e, listId, rowSelector, kind, gap); }, { passive: false });
+    handle.addEventListener('mousedown', function(e){ onDragStart(e, listId, rowSelector, kind, gap); });
+  });
+}
+
+function onDragStart(e, listId, rowSelector, kind, gap) {
+  e.preventDefault();
+  var row = e.target.closest(rowSelector);
+  if (!row) return;
+  var list = document.getElementById(listId);
+  var rows = Array.from(list.querySelectorAll(rowSelector));
+  var startY = (e.touches ? e.touches[0].clientY : e.clientY);
+  _dragState = {
+    row: row,
+    list: list,
+    rows: rows,
+    kind: kind,
+    fromIdx: rows.indexOf(row),
+    startY: startY,
+    rowHeight: row.offsetHeight + (gap || 8)
+  };
+  row.style.opacity = '0.6';
+  row.style.transform = 'scale(1.02)';
+  row.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+  row.style.transition = 'none';
+  row.style.zIndex = '10';
+  row.style.position = 'relative';
+  document.addEventListener('touchmove', onDragMove, { passive: false });
+  document.addEventListener('mousemove', onDragMove);
+  document.addEventListener('touchend', onDragEnd);
+  document.addEventListener('mouseend', onDragEnd);
+  document.addEventListener('mouseup', onDragEnd);
+}
+
+function onDragMove(e) {
+  if (!_dragState) return;
+  e.preventDefault();
+  var curY = (e.touches ? e.touches[0].clientY : e.clientY);
+  var dy = curY - _dragState.startY;
+  _dragState.row.style.transform = 'translateY('+dy+'px) scale(1.02)';
+  var moveSteps = Math.round(dy / _dragState.rowHeight);
+  var targetIdx = _dragState.fromIdx + moveSteps;
+  targetIdx = Math.max(0, Math.min(_dragState.rows.length - 1, targetIdx));
+  _dragState.targetIdx = targetIdx;
+  _dragState.rows.forEach(function(r, i) {
+    if (r === _dragState.row) return;
+    r.style.transition = 'transform 0.15s';
+    if (_dragState.fromIdx < targetIdx && i > _dragState.fromIdx && i <= targetIdx) {
+      r.style.transform = 'translateY(-'+_dragState.rowHeight+'px)';
+    } else if (_dragState.fromIdx > targetIdx && i < _dragState.fromIdx && i >= targetIdx) {
+      r.style.transform = 'translateY('+_dragState.rowHeight+'px)';
+    } else {
+      r.style.transform = '';
+    }
+  });
+}
+
+function onDragEnd(e) {
+  if (!_dragState) return;
+  document.removeEventListener('touchmove', onDragMove);
+  document.removeEventListener('mousemove', onDragMove);
+  document.removeEventListener('touchend', onDragEnd);
+  document.removeEventListener('mouseend', onDragEnd);
+  document.removeEventListener('mouseup', onDragEnd);
+  var from = _dragState.fromIdx;
+  var to = (_dragState.targetIdx !== undefined) ? _dragState.targetIdx : from;
+  var kind = _dragState.kind;
+  _dragState = null;
+  if (from !== to) {
+    if (kind === 'family') {
+      var arr = getParents();
+      var moved = arr.splice(from, 1)[0];
+      arr.splice(to, 0, moved);
+      saveParents(arr);
+      renderAttendancePage();
+      renderFamilies();
+    } else if (kind === 'player') {
+      var moved2 = players.splice(from, 1)[0];
+      players.splice(to, 0, moved2);
+      savePlayers();
+      renderPlayers();
+    }
+  } else {
+    if (kind === 'family') renderFamilies();
+    else if (kind === 'player') renderPlayers();
+  }
 }
 
 // ===== 試合名マスタ =====
@@ -1551,10 +1650,20 @@ function renderPlayers() {
     if (cnt) cnt.textContent = '';
     return;
   }
-  el.innerHTML = '<div class="player-grid">' +
-    players.map(p=>`<div class="player-chip"><span>${p.name}</span><button onclick="removePlayer(${p.id})">✕</button></div>`).join('') + '</div>';
+  el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">≡ を長押ししてドラッグすると順番を入れ替えられます</div>' +
+    '<div id="player-drag-list" style="display:flex;flex-direction:column;gap:8px;">' +
+    players.map(function(p) {
+      return '<div class="player-row" data-id="'+p.id+'" style="display:flex;align-items:center;justify-content:space-between;background:var(--accent-light);border:1px solid var(--accent-border);border-radius:8px;padding:8px 12px;touch-action:none;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span class="drag-handle" style="cursor:grab;color:#999;font-size:18px;padding:4px 6px;touch-action:none;user-select:none;-webkit-user-select:none;">≡</span>' +
+          '<span style="font-size:14px;font-weight:600;color:var(--text);">' + p.name + '</span>' +
+        '</div>' +
+        '<button onclick="removePlayer(' + p.id + ')" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:15px;padding:2px 4px;">✕</button>' +
+      '</div>';
+    }).join('') + '</div>';
   const cnt = document.getElementById('player-count');
   if (cnt) cnt.textContent = `計 ${players.length} 名`;
+  setupDragList('player-drag-list', '.player-row', 'player', 8);
 }
 
 async function addPlayer() {
@@ -1803,13 +1912,15 @@ function startAutoSync() {
       var masterChanged = false;
       if (Array.isArray(master.players)) {
         var localPlayers = JSON.parse(localStorage.getItem('fc_players_permanent') || '[]');
-        var localIds = localPlayers.map(function(p){ return p.id; }).sort().join(',');
-        var cloudIds = master.players.map(function(p){ return p.id; }).sort().join(',');
-        if (localIds !== cloudIds) {
+        // 順番も含めて比較（IDの並び順）
+        var localOrder = localPlayers.map(function(p){ return p.id; }).join(',');
+        var cloudOrder = master.players.map(function(p){ return p.id; }).join(',');
+        if (localOrder !== cloudOrder && !_masterPushing) {
           localStorage.setItem('fc_players_permanent', JSON.stringify(master.players));
           localStorage.setItem('fc_players', JSON.stringify(master.players));
           players = master.players;
           renderPlayers();
+          renderAllMatches();
         }
       }
 
