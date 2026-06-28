@@ -798,6 +798,7 @@ function moveFamily(idx, dir) {
 
 // ===== 汎用ドラッグ&ドロップ並び替え =====
 var _dragState = null;
+var _carpoolEditTime = 0; // 配車を最後に編集した時刻（ローカル優先保護用）
 function setupFamilyDrag() {
   setupDragList('family-drag-list', '.family-row', 'family', 8);
 }
@@ -1144,6 +1145,7 @@ function setCarpoolDrive(sid, parent, val) {
   if (!d[sid]) d[sid] = {};
   if (!d[sid][parent]) d[sid][parent] = {};
   d[sid][parent].drive = val;
+  _carpoolEditTime = Date.now();
   saveCarpoolData(d);
   renderAttendancePage();
 }
@@ -1153,6 +1155,7 @@ function setCarpoolNum(sid, parent, field, val) {
   if (!d[sid]) d[sid] = {};
   if (!d[sid][parent]) d[sid][parent] = {};
   d[sid][parent][field] = val;
+  _carpoolEditTime = Date.now();
   saveCarpoolData(d);
   renderAttendancePage();
 }
@@ -1897,7 +1900,7 @@ async function pullMasterFromCloud() {
     if (Array.isArray(master.parents))    { localStorage.setItem('fc_parents',     JSON.stringify(master.parents));    _parentsCache = null; }
     if (Array.isArray(master.venues))     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
     if (Array.isArray(master.matchNames)) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
-    if (master.carpool && typeof master.carpool === 'object' && !_masterPushing) { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
+    if (master.carpool && typeof master.carpool === 'object' && !_masterPushing && (Date.now() - _carpoolEditTime > 15000)) { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
     if (master.duty    && typeof master.duty    === 'object' && !_masterPushing) { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
     if (master.attPlayers && typeof master.attPlayers === 'object' && !_masterPushing) { localStorage.setItem('fc_family_players', JSON.stringify(master.attPlayers)); }
   } catch(e) {}
@@ -1954,7 +1957,7 @@ function startAutoSync() {
       }
       if (Array.isArray(master.venues))     localStorage.setItem('fc_venues',      JSON.stringify(master.venues));
       if (Array.isArray(master.matchNames)) localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames));
-      if (master.carpool && typeof master.carpool==='object' && !_masterPushing) {
+      if (master.carpool && typeof master.carpool==='object' && !_masterPushing && (Date.now() - _carpoolEditTime > 15000)) {
         var curCp = localStorage.getItem('fc_carpool') || '{}';
         var nwCp = JSON.stringify(master.carpool);
         if (curCp !== nwCp) { localStorage.setItem('fc_carpool', nwCp); masterChanged = true; }
@@ -1966,10 +1969,11 @@ function startAutoSync() {
         if (curAp !== nwAp) { localStorage.setItem('fc_family_players', nwAp); masterChanged = true; }
       }
       if (masterChanged) {
-        // 配車入力中（フォーカス中）は再描画をスキップして入力値を保護
+        // 配車入力中（フォーカス中）または編集直後は再描画をスキップして入力値を保護
         var activeEl = document.activeElement;
         var isEditingCarpool = activeEl && (activeEl.classList.contains('cp-num') || activeEl.classList.contains('cp-drive-sel'));
-        if (!isEditingCarpool) { _parentsCache = null; renderAttendancePage(); }
+        var recentlyEdited = (Date.now() - _carpoolEditTime < 15000);
+        if (!isEditingCarpool && !recentlyEdited) { _parentsCache = null; renderAttendancePage(); }
       }
     }).catch(function(){});
     // 出欠データ同期
