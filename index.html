@@ -1862,10 +1862,10 @@ var _lastSyncLabel = null;
 var _masterPushTimer = null;
 var _masterPushing = false;
 function pushMasterToCloud() {
+  _masterPushing = true; // デバウンス待機中も保護
   if (_masterPushTimer) clearTimeout(_masterPushTimer);
   _masterPushTimer = setTimeout(function() {
-    if (typeof gasUrl === 'undefined' || !gasUrl) return;
-    _masterPushing = true;
+    if (typeof gasUrl === 'undefined' || !gasUrl) { _masterPushing = false; return; }
     var master = {
       schedules:  JSON.parse(localStorage.getItem('fc_schedules') || '[]'),
       parents:    JSON.parse(localStorage.getItem('fc_parents') || '[]'),
@@ -1877,7 +1877,7 @@ function pushMasterToCloud() {
       players:    JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]')
     };
     gasReq({action: 'saveMaster', data: JSON.stringify(master)})
-      .then(function(){ _masterPushing = false; })
+      .then(function(){ setTimeout(function(){ _masterPushing = false; }, 500); })
       .catch(function(){ _masterPushing = false; });
   }, 300);
 }
@@ -1953,7 +1953,7 @@ function startAutoSync() {
       }
       if (Array.isArray(master.venues))     localStorage.setItem('fc_venues',      JSON.stringify(master.venues));
       if (Array.isArray(master.matchNames)) localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames));
-      if (master.carpool && typeof master.carpool==='object') {
+      if (master.carpool && typeof master.carpool==='object' && !_masterPushing) {
         var curCp = localStorage.getItem('fc_carpool') || '{}';
         var nwCp = JSON.stringify(master.carpool);
         if (curCp !== nwCp) { localStorage.setItem('fc_carpool', nwCp); masterChanged = true; }
@@ -1964,7 +1964,12 @@ function startAutoSync() {
         var nwAp = JSON.stringify(master.attPlayers);
         if (curAp !== nwAp) { localStorage.setItem('fc_family_players', nwAp); masterChanged = true; }
       }
-      if (masterChanged) { _parentsCache = null; renderAttendancePage(); }
+      if (masterChanged) {
+        // 配車入力中（フォーカス中）は再描画をスキップして入力値を保護
+        var activeEl = document.activeElement;
+        var isEditingCarpool = activeEl && (activeEl.classList.contains('cp-num') || activeEl.classList.contains('cp-drive-sel'));
+        if (!isEditingCarpool) { _parentsCache = null; renderAttendancePage(); }
+      }
     }).catch(function(){});
     // 出欠データ同期
     gasReq({action:'getAttendance'}).then(function(cloudData) {
