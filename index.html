@@ -1146,7 +1146,8 @@ function setCarpoolDrive(sid, parent, val) {
   if (!d[sid][parent]) d[sid][parent] = {};
   d[sid][parent].drive = val;
   _carpoolEditTime = Date.now();
-  saveCarpoolData(d);
+  localStorage.setItem('fc_carpool', JSON.stringify(d));
+  pushMasterNow();
   renderAttendancePage();
 }
 function setCarpoolNum(sid, parent, field, val) {
@@ -1156,8 +1157,29 @@ function setCarpoolNum(sid, parent, field, val) {
   if (!d[sid][parent]) d[sid][parent] = {};
   d[sid][parent][field] = val;
   _carpoolEditTime = Date.now();
-  saveCarpoolData(d);
+  localStorage.setItem('fc_carpool', JSON.stringify(d));
+  pushMasterNow(); // デバウンスせず即座に送信
   renderAttendancePage();
+}
+
+// 即座にマスタを送信（配車など消えやすいデータ用）
+function pushMasterNow() {
+  if (typeof gasUrl === 'undefined' || !gasUrl) return;
+  if (_masterPushTimer) clearTimeout(_masterPushTimer);
+  _masterPushing = true;
+  var master = {
+    schedules:  JSON.parse(localStorage.getItem('fc_schedules') || '[]'),
+    parents:    JSON.parse(localStorage.getItem('fc_parents') || '[]'),
+    venues:     JSON.parse(localStorage.getItem('fc_venues') || '[]'),
+    matchNames: JSON.parse(localStorage.getItem('fc_match_names') || '[]'),
+    carpool:    JSON.parse(localStorage.getItem('fc_carpool') || '{}'),
+    duty:       JSON.parse(localStorage.getItem('fc_duty') || '{}'),
+    attPlayers: JSON.parse(localStorage.getItem('fc_family_players') || '{}'),
+    players:    JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]')
+  };
+  gasReq({action: 'saveMaster', data: JSON.stringify(master)})
+    .then(function(){ setTimeout(function(){ _masterPushing = false; }, 2000); })
+    .catch(function(){ _masterPushing = false; });
 }
 
 function deleteSchedule(sid) {
@@ -1900,7 +1922,7 @@ async function pullMasterFromCloud() {
     if (Array.isArray(master.parents))    { localStorage.setItem('fc_parents',     JSON.stringify(master.parents));    _parentsCache = null; }
     if (Array.isArray(master.venues))     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
     if (Array.isArray(master.matchNames)) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
-    if (master.carpool && typeof master.carpool === 'object' && !_masterPushing && (Date.now() - _carpoolEditTime > 15000)) { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
+    if (master.carpool && typeof master.carpool === 'object' && !_masterPushing && (Date.now() - _carpoolEditTime > 30000)) { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
     if (master.duty    && typeof master.duty    === 'object' && !_masterPushing) { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
     if (master.attPlayers && typeof master.attPlayers === 'object' && !_masterPushing) { localStorage.setItem('fc_family_players', JSON.stringify(master.attPlayers)); }
   } catch(e) {}
@@ -1957,7 +1979,7 @@ function startAutoSync() {
       }
       if (Array.isArray(master.venues))     localStorage.setItem('fc_venues',      JSON.stringify(master.venues));
       if (Array.isArray(master.matchNames)) localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames));
-      if (master.carpool && typeof master.carpool==='object' && !_masterPushing && (Date.now() - _carpoolEditTime > 15000)) {
+      if (master.carpool && typeof master.carpool==='object' && !_masterPushing && (Date.now() - _carpoolEditTime > 30000)) {
         var curCp = localStorage.getItem('fc_carpool') || '{}';
         var nwCp = JSON.stringify(master.carpool);
         if (curCp !== nwCp) { localStorage.setItem('fc_carpool', nwCp); masterChanged = true; }
@@ -1972,7 +1994,7 @@ function startAutoSync() {
         // 配車入力中（フォーカス中）または編集直後は再描画をスキップして入力値を保護
         var activeEl = document.activeElement;
         var isEditingCarpool = activeEl && (activeEl.classList.contains('cp-num') || activeEl.classList.contains('cp-drive-sel'));
-        var recentlyEdited = (Date.now() - _carpoolEditTime < 15000);
+        var recentlyEdited = (Date.now() - _carpoolEditTime < 30000);
         if (!isEditingCarpool && !recentlyEdited) { _parentsCache = null; renderAttendancePage(); }
       }
     }).catch(function(){});
