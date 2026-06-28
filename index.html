@@ -1630,6 +1630,16 @@ function saveGasUrl() {
 
 async function gasReq(params) {
   if (!gasUrl) throw new Error('URL未設定');
+  // データ量が多い書き込み系（dataを含む）はPOSTで送信（URL長制限を回避）
+  if (params.data !== undefined) {
+    const res = await fetch(gasUrl, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(params)
+    });
+    return await res.json();
+  }
   const url = gasUrl + '?' + new URLSearchParams(params);
   const res = await fetch(url, { cache: 'no-store' });
   return await res.json();
