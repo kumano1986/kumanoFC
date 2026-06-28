@@ -1154,6 +1154,7 @@ function setCarpoolNum(sid, parent, field, val) {
   if (!d[sid][parent]) d[sid][parent] = {};
   d[sid][parent][field] = val;
   saveCarpoolData(d);
+  renderAttendancePage();
 }
 
 function deleteSchedule(sid) {
@@ -1877,7 +1878,7 @@ function pushMasterToCloud() {
       players:    JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]')
     };
     gasReq({action: 'saveMaster', data: JSON.stringify(master)})
-      .then(function(){ setTimeout(function(){ _masterPushing = false; }, 500); })
+      .then(function(){ setTimeout(function(){ _masterPushing = false; }, 2000); })
       .catch(function(){ _masterPushing = false; });
   }, 300);
 }
@@ -1892,13 +1893,13 @@ async function pullMasterFromCloud() {
       localStorage.setItem('fc_players', JSON.stringify(master.players));
       players = master.players;
     }
-    if (Array.isArray(master.schedules))  { localStorage.setItem('fc_schedules',   JSON.stringify(master.schedules));  }
+    if (master.schedules && Array.isArray(master.schedules) && !_masterPushing)  { localStorage.setItem('fc_schedules',   JSON.stringify(master.schedules));  }
     if (Array.isArray(master.parents))    { localStorage.setItem('fc_parents',     JSON.stringify(master.parents));    _parentsCache = null; }
     if (Array.isArray(master.venues))     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
     if (Array.isArray(master.matchNames)) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
-    if (master.carpool && typeof master.carpool === 'object') { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
-    if (master.duty    && typeof master.duty    === 'object') { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
-    if (master.attPlayers && typeof master.attPlayers === 'object') { localStorage.setItem('fc_family_players', JSON.stringify(master.attPlayers)); }
+    if (master.carpool && typeof master.carpool === 'object' && !_masterPushing) { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
+    if (master.duty    && typeof master.duty    === 'object' && !_masterPushing) { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
+    if (master.attPlayers && typeof master.attPlayers === 'object' && !_masterPushing) { localStorage.setItem('fc_family_players', JSON.stringify(master.attPlayers)); }
   } catch(e) {}
 }
 
