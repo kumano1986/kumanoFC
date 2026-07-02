@@ -799,6 +799,7 @@ function moveFamily(idx, dir) {
 // ===== 汎用ドラッグ&ドロップ並び替え =====
 var _dragState = null;
 var _carpoolEditTime = 0; // 配車を最後に編集した時刻（ローカル優先保護用）
+var _dutyEditTime = 0; // 当番を最後に編集した時刻
 function setupFamilyDrag() {
   setupDragList('family-drag-list', '.family-row', 'family', 8);
 }
@@ -1736,7 +1737,7 @@ async function saveMatches() {
 
 async function submitToSummary() {
   if (!matches.length) { showToast('試合データがありません'); return; }
-  if (!confirm('試合結果を確定してスプレッドシートに送信しますか？')) return;
+  if (!confirm('OKを押すと本日の試合結果はこの画面から消えます。\n（まとめタブの年度成績には記録されます）')) return;
   const date = reportMeta.date || new Date().toISOString().split('T')[0];
   const grade = reportMeta.grade || 'FC熊野';
   const nendo = getNendo(date);
@@ -1762,9 +1763,12 @@ async function submitToSummary() {
       action: 'addMatchRecord',
       data: JSON.stringify({nendo, date, grade, win, lose, draw, gf, ga, scorers})
     });
-    // 試合データもクラウドに保存
-    await gasReq({action:'saveMatches', data:JSON.stringify(matches)}).catch(function(){});
-    showToast('✅ スプレッドシートに保存しました');
+    // 画面の試合データをクリア
+    matches = [];
+    matchCounter = 0;
+    localStorage.setItem('fc_matches', JSON.stringify(matches));
+    renderAllMatches();
+    showToast('✅ 保存しました。まとめタブに反映されます');
   } catch(e) {
     showToast('❌ 保存失敗: ' + e.message);
   }
@@ -1933,7 +1937,7 @@ async function pullMasterFromCloud() {
     if (Array.isArray(master.venues))     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
     if (Array.isArray(master.matchNames)) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
     if (master.carpool && typeof master.carpool === 'object' && !_masterPushing && (Date.now() - _carpoolEditTime > 30000)) { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
-    if (master.duty    && typeof master.duty    === 'object' && !_masterPushing) { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
+    if (master.duty    && typeof master.duty    === 'object' && !_masterPushing && (Date.now() - _dutyEditTime > 30000)) { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
     if (master.attPlayers && typeof master.attPlayers === 'object' && !_masterPushing) { localStorage.setItem('fc_family_players', JSON.stringify(master.attPlayers)); }
   } catch(e) {}
 }
@@ -1994,7 +1998,11 @@ function startAutoSync() {
         var nwCp = JSON.stringify(master.carpool);
         if (curCp !== nwCp) { localStorage.setItem('fc_carpool', nwCp); masterChanged = true; }
       }
-      if (master.duty && typeof master.duty==='object') localStorage.setItem('fc_duty', JSON.stringify(master.duty));
+      if (master.duty && typeof master.duty==='object' && !_masterPushing && (Date.now() - _dutyEditTime > 30000)) {
+        var curDy = localStorage.getItem('fc_duty') || '{}';
+        var nwDy = JSON.stringify(master.duty);
+        if (curDy !== nwDy) { localStorage.setItem('fc_duty', nwDy); masterChanged = true; }
+      }
       if (master.attPlayers && typeof master.attPlayers==='object') {
         var curAp = localStorage.getItem('fc_family_players') || '{}';
         var nwAp = JSON.stringify(master.attPlayers);
@@ -2221,8 +2229,9 @@ function renderAttendancePage() {
               lockBadge +
               (assigned ? '<span style="background:#2d7a4f;color:white;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">当番: '+assigned+'</span>' : '') +
             '</div>' +
-            '<div style="font-size:12px;color:var(--text-muted);">' + s.grade + '　' + s.venue + '</div>' +
-            (s.note ? '<div style="font-size:11px;color:var(--red);">' + s.note + '</div>' : '') +
+            '<div style="font-size:16px;color:var(--text);font-weight:600;margin-top:2px;">' + s.grade + '</div>' +
+            '<div style="font-size:16px;color:var(--text-muted);">' + s.venue + '</div>' +
+            (s.note ? '<div style="font-size:11px;color:var(--red);margin-top:2px;">' + s.note + '</div>' : '') +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:6px;">' +
             '<div style="font-size:13px;font-weight:700;color:var(--green);white-space:nowrap;">参加選手 ' + totalPlayers + '名</div>' +
@@ -2852,9 +2861,8 @@ function getDutyData() {
 }
 function saveDutyData(d) {
   localStorage.setItem('fc_duty', JSON.stringify(d));
-  if (typeof gasUrl !== 'undefined' && gasUrl) {
-    gasReq({action:'saveDuty', data:JSON.stringify(d)}).catch(function(){});
-  }
+  _dutyEditTime = Date.now();
+  pushMasterNow(); // マスタ経由で即時送信
 }
 
 function assignDuty(sid, name) {
