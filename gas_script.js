@@ -165,22 +165,44 @@ function getSummary(nendo) {
   const sheet = getSheet(SHEET_SUMMARY);
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
-  const headers = data[0];
-  return data.slice(1).filter(r => r[0] && String(r[0]) !== '合計')
-    .filter(r => !nendo || r[0] == nendo)
+  const headers = data[0].map(String);
+  // カラム位置をヘッダー名から特定（新旧フォーマット両対応）
+  const idx = {
+    nendo: headers.indexOf('年度'),
+    date: headers.indexOf('日付'),
+    grade: headers.indexOf('学年'),
+    matchName: headers.indexOf('試合名'),
+    opponent: headers.indexOf('対戦相手'),
+    win: headers.indexOf('勝'),
+    lose: headers.indexOf('負'),
+    draw: headers.indexOf('分'),
+    gf: headers.indexOf('得点'),
+    ga: headers.indexOf('失点'),
+    diff: headers.indexOf('得失点差')
+  };
+  // 選手カラムは得失点差より後
+  const scorerStart = idx.diff + 1;
+  return data.slice(1).filter(r => r[idx.nendo] && String(r[idx.nendo]) !== '合計')
+    .filter(r => !nendo || r[idx.nendo] == nendo)
     .map(r => {
       const scorers = {};
-      for (let i = 9; i < headers.length; i++) {
+      for (let i = scorerStart; i < headers.length; i++) {
         if (headers[i] && r[i]) scorers[headers[i]] = r[i];
       }
-      return { nendo:r[0], date:r[1], grade:r[2], win:r[3], lose:r[4], draw:r[5], gf:r[6], ga:r[7], scorers };
+      return {
+        nendo: r[idx.nendo], date: r[idx.date], grade: r[idx.grade],
+        matchName: idx.matchName >= 0 ? r[idx.matchName] : '',
+        opponent: idx.opponent >= 0 ? r[idx.opponent] : '',
+        win: r[idx.win], lose: r[idx.lose], draw: r[idx.draw],
+        gf: r[idx.gf], ga: r[idx.ga], scorers
+      };
     });
 }
 
 function addMatchRecord(data) {
   const sheet = getSheet(SHEET_SUMMARY);
   const allData = sheet.getDataRange().getValues();
-  const baseHeaders = ['年度','日付','学年','勝','負','分','得点','失点','得失点差'];
+  const baseHeaders = ['年度','日付','学年','試合名','対戦相手','勝','負','分','得点','失点','得失点差'];
   let headers;
 
   if (allData.length === 0 || !allData[0][0]) {
@@ -190,7 +212,25 @@ function addMatchRecord(data) {
     sheet.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
   } else {
     headers = allData[0].map(String);
+    // 旧フォーマット（試合名・対戦相手なし）の場合はカラムを挿入
+    if (headers.indexOf('試合名') < 0) {
+      sheet.insertColumnsAfter(3, 2);
+      sheet.getRange(1, 4).setValue('試合名').setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
+      sheet.getRange(1, 5).setValue('対戦相手').setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
+      headers.splice(3, 0, '試合名', '対戦相手');
+    }
   }
+
+  // 試合名・対戦相手をまとめる（複数試合がある場合は連結）
+  var matchNames = [], opponents = [];
+  if (Array.isArray(data.matches)) {
+    data.matches.forEach(function(m) {
+      if (m.venue) matchNames.push(m.venue);
+      if (m.opponent) opponents.push(m.opponent);
+    });
+  }
+  var matchNameStr = matchNames.length ? matchNames.join(' / ') : '';
+  var opponentStr = opponents.length ? opponents.join(' / ') : '';
 
   // 新しい選手カラムを追加
   const scorerNames = Object.keys(data.scorers);
@@ -212,11 +252,12 @@ function addMatchRecord(data) {
   const diff = data.gf - data.ga;
   const row = [
     data.nendo, data.date, data.grade,
+    matchNameStr, opponentStr,
     data.win, data.lose, data.draw,
     data.gf, data.ga,
     diff >= 0 ? '+' + diff : String(diff)
   ];
-  for (let i = 9; i < headers.length; i++) {
+  for (let i = 11; i < headers.length; i++) {
     row.push(data.scorers[headers[i]] || 0);
   }
   sheet.appendRow(row);
@@ -232,15 +273,15 @@ function updateSummaryTotal(sheet, headers) {
   const dataRows = allData.slice(1).filter(r => r[0] && String(r[0]) !== '合計');
   if (!dataRows.length) return;
 
-  const totalRow = ['合計', '', ''];
-  totalRow.push(dataRows.reduce((s,r)=>s+(parseInt(r[3])||0),0));
-  totalRow.push(dataRows.reduce((s,r)=>s+(parseInt(r[4])||0),0));
-  totalRow.push(dataRows.reduce((s,r)=>s+(parseInt(r[5])||0),0));
-  totalRow.push(dataRows.reduce((s,r)=>s+(parseInt(r[6])||0),0));
-  totalRow.push(dataRows.reduce((s,r)=>s+(parseInt(r[7])||0),0));
-  const diff = totalRow[6] - totalRow[7];
+  const totalRow = ['合計', '', '', '', ''];
+  totalRow.push(dataRows.reduce((s,r)=>s+(parseInt(r[5])||0),0));  // 勝
+  totalRow.push(dataRows.reduce((s,r)=>s+(parseInt(r[6])||0),0));  // 負
+  totalRow.push(dataRows.reduce((s,r)=>s+(parseInt(r[7])||0),0));  // 分
+  totalRow.push(dataRows.reduce((s,r)=>s+(parseInt(r[8])||0),0));  // 得点
+  totalRow.push(dataRows.reduce((s,r)=>s+(parseInt(r[9])||0),0));  // 失点
+  const diff = totalRow[8] - totalRow[9];
   totalRow.push(diff >= 0 ? '+' + diff : String(diff));
-  for (let i = 9; i < headers.length; i++) {
+  for (let i = 11; i < headers.length; i++) {
     totalRow.push(dataRows.reduce((s,r)=>s+(parseInt(r[i])||0),0));
   }
 

@@ -344,7 +344,6 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
 
 <div class="tab-bar">
   <button class="active" onclick="showPage('report',this)">📋 試合</button>
-  <button onclick="showPage('result',this)">🏆 試合結果</button>
   <button onclick="showPage('attendance',this)">📅 出欠確認</button>
   <button onclick="showPage('duty',this)">🔔 当番</button>
   <button onclick="showPage('summary',this)">📊 まとめ</button>
@@ -495,14 +494,9 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
   <div class="add-btn-row">
     <button class="btn btn-outline" onclick="addMatch()">＋ 試合を追加</button>
   </div>
-  <button class="btn btn-full" id="btn-finish-match" onclick="submitToSummary()" style="margin-top:8px;background:#e74c3c;color:white;font-weight:700;font-size:15px;padding:14px;border:none;border-radius:10px;cursor:pointer;">
-    💾 試合結果を保存
-  </button>
-</div>
 
-<!-- ===== 試合結果 ===== -->
-<div id="page-result" class="page">
-  <div id="result-share-card" style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.12);margin-bottom:12px;">
+  <!-- 共有用結果カード -->
+  <div id="result-share-card" style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.12);margin:14px 0 10px;">
     <div style="background:var(--green);padding:14px 16px 12px;">
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:white;letter-spacing:1px;">⚽ FC KUMANO</div>
       <div id="rs-meta" style="font-size:11px;color:rgba(255,255,255,0.85);margin-top:3px;"></div>
@@ -514,7 +508,21 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
     ① 上の結果カードをスクリーンショット<br>
     ② LINEを開いてトークルームに画像を送信
   </div>
-  <button class="btn btn-share btn-full" onclick="shareResult()">📤 LINEで共有</button>
+
+  <!-- ①LINEで共有 -->
+  <button class="btn btn-share btn-full" onclick="shareResult()" style="margin-bottom:8px;">① 📤 LINEで共有</button>
+  <!-- ②試合結果を保存 -->
+  <button class="btn btn-full" id="btn-finish-match" onclick="submitToSummary()" style="margin-bottom:8px;background:#e74c3c;color:white;font-weight:700;font-size:15px;padding:14px;border:none;border-radius:10px;cursor:pointer;">
+    ② 💾 試合結果を保存（まとめに記録）
+  </button>
+  <!-- ③入力内容を削除 -->
+  <button class="btn btn-full" onclick="clearMatchInput()" style="background:#888;color:white;font-weight:700;font-size:14px;padding:12px;border:none;border-radius:10px;cursor:pointer;">
+    ③ 🗑 上記入力内容を削除する
+  </button>
+</div>
+
+<!-- ===== 試合結果（旧タブ・非表示） ===== -->
+<div id="page-result" class="page" style="display:none;">
 </div>
 
 <!-- ===== 出欠確認 ===== -->
@@ -1737,7 +1745,6 @@ async function saveMatches() {
 
 async function submitToSummary() {
   if (!matches.length) { showToast('試合データがありません'); return; }
-  if (!confirm('OKを押すと本日の試合結果はこの画面から消えます。\n（まとめタブの年度成績には記録されます）')) return;
   const date = reportMeta.date || new Date().toISOString().split('T')[0];
   const grade = reportMeta.grade || 'FC熊野';
   const nendo = getNendo(date);
@@ -1761,17 +1768,22 @@ async function submitToSummary() {
   try {
     await gasReq({
       action: 'addMatchRecord',
-      data: JSON.stringify({nendo, date, grade, win, lose, draw, gf, ga, scorers})
+      data: JSON.stringify({nendo, date, grade, win, lose, draw, gf, ga, scorers, matches})
     });
-    // 画面の試合データをクリア
-    matches = [];
-    matchCounter = 0;
-    localStorage.setItem('fc_matches', JSON.stringify(matches));
-    renderAllMatches();
     showToast('✅ 保存しました。まとめタブに反映されます');
   } catch(e) {
     showToast('❌ 保存失敗: ' + e.message);
   }
+}
+
+function clearMatchInput() {
+  if (!matches.length) { showToast('入力内容がありません'); return; }
+  if (!confirm('共有と保存は完了していますか？\n本当に削除しても良いですか？')) return;
+  matches = [];
+  matchCounter = 0;
+  localStorage.setItem('fc_matches', JSON.stringify(matches));
+  renderAllMatches();
+  showToast('🗑 入力内容を削除しました');
 }
 
 async function loadSummary() {
@@ -2224,10 +2236,13 @@ function renderAttendancePage() {
       '<div class="card" style="'+(locked?'opacity:0.85;border:1.5px solid #f5c0bb;':'')+cardBg+'">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">' +
           '<div>' +
-            '<div style="display:flex;align-items:center;gap:6px;">' +
+            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
               '<div style="font-size:17px;font-weight:700;color:var(--green);">' + dateLabel + '</div>' +
               lockBadge +
               (assigned ? '<span style="background:#2d7a4f;color:white;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">当番: '+assigned+'</span>' : '') +
+              (isAdmin()
+                ? '<button class="grade-duty-btn" data-sid="'+s.id+'" style="border-radius:5px;font-size:11px;font-weight:700;padding:3px 10px;cursor:pointer;border:1.5px solid '+(s.gradeDuty?'#2d7a4f':'#ddd')+';background:'+(s.gradeDuty?'#2d7a4f':'white')+';color:'+(s.gradeDuty?'white':'#888')+';">学年当番'+(s.gradeDuty?' ✓':'')+'</button>'
+                : (s.gradeDuty ? '<span style="background:#e6a817;color:white;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">学年当番</span>' : '')) +
             '</div>' +
             '<div style="font-size:16px;color:var(--text);font-weight:600;margin-top:2px;">' + s.grade + '</div>' +
             '<div style="font-size:16px;color:var(--text-muted);">' + s.venue + '</div>' +
@@ -2256,7 +2271,7 @@ function renderAttendancePage() {
 let players = [], matches = [], matchCounter = 0;
 
 // ===== データバージョン管理 =====
-const APP_DATA_VERSION = '20260627'; // 大きな仕様変更時にこの番号を上げる
+const APP_DATA_VERSION = '20260710'; // 大きな仕様変更時にこの番号を上げる
 (function checkDataVersion() {
   var savedVersion = localStorage.getItem('fc_data_version');
   if (savedVersion !== APP_DATA_VERSION) {
@@ -2485,10 +2500,9 @@ function applyLang() {
   var ja = _lang === 'ja';
   var tabs = document.querySelectorAll('.tab-bar button');
   if (tabs[0]) tabs[0].innerHTML = t('tab_report');
-  if (tabs[1]) tabs[1].innerHTML = t('tab_result');
-  if (tabs[2]) tabs[2].innerHTML = t('tab_attendance');
-  if (tabs[3]) tabs[3].innerHTML = t('tab_duty');
-  if (tabs[4]) tabs[4].innerHTML = t('tab_summary');
+  if (tabs[1]) tabs[1].innerHTML = t('tab_attendance');
+  if (tabs[2]) tabs[2].innerHTML = t('tab_duty');
+  if (tabs[3]) tabs[3].innerHTML = t('tab_summary');
   var legend = document.getElementById('att-legend');
   if (legend) legend.textContent = t('attend_legend');
   var initText = document.getElementById('sync-init-text');
@@ -2759,6 +2773,7 @@ function renderAllMatches() {
       </div>
     </div>`).join('');
   matches.forEach(m=>renderScorerList(m.id));
+  renderResultPage(); // 共有カードも更新
 }
 
 // ===== 試合結果ページ =====
@@ -2881,21 +2896,29 @@ function clearDuty(sid) {
   renderAttendancePage();
 }
 
+function toggleGradeDuty(sid) {
+  if (!isAdmin()) { showToast('★付き家族のみ操作できます'); return; }
+  var scheds = getSchedules();
+  var s = scheds.find(function(x){return x.id===sid;});
+  if (!s) return;
+  s.gradeDuty = !s.gradeDuty;
+  saveSchedules(scheds);
+  renderAttendancePage();
+  renderDutyPage();
+  showToast(s.gradeDuty ? '学年当番に設定しました' : '学年当番を解除しました');
+}
+
 // 当番候補を求める：当日◯ かつ 翌日程も◯
 function getDutyCandidates(sid) {
   var scheds = getSchedules().filter(function(s){return !s.archived;});
   scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
   var idx = scheds.findIndex(function(s){return s.id===sid;});
   if (idx < 0) return [];
-  var nextSched = scheds[idx+1]; // 翌日程
   var attData = getAttendanceData();
   var curAtt = attData[sid] || {};
-  var nextAtt = nextSched ? (attData[nextSched.id] || {}) : {};
-  // 当日◯ かつ 翌日程も◯（翌日程なければ当日◯のみ）
+  // 当日◯の家族のみ当番候補。●（当番不可）は除外
   return getParents().filter(function(p) {
-    if (curAtt[p] !== '◯' && curAtt[p] !== '●') return false;
-    if (nextSched && nextAtt[p] !== '◯' && nextAtt[p] !== '●') return false;
-    return true;
+    return curAtt[p] === '◯';
   });
 }
 
@@ -2966,6 +2989,7 @@ function renderDutyPage() {
             '<div>' +
               '<span style="font-size:14px;font-weight:700;color:var(--green);">' + dateLabel + '</span>' +
               '<span style="font-size:12px;color:var(--text-muted);margin-left:6px;">' + s.grade + '</span>' +
+              (s.gradeDuty ? '<span style="background:#e6a817;color:white;border-radius:5px;font-size:10px;font-weight:700;padding:2px 7px;margin-left:6px;">学年当番</span>' : '') +
             '</div>' +
             (assigned
               ? '<div style="display:flex;align-items:center;gap:6px;">' +
@@ -3042,6 +3066,8 @@ document.addEventListener('click', function(e) {
   if (da) { assignDuty(da.dataset.sid, da.dataset.name); return; }
   var dc = e.target.closest('.duty-clear-btn');
   if (dc) { clearDuty(dc.dataset.sid); return; }
+  var gd = e.target.closest('.grade-duty-btn');
+  if (gd) { toggleGradeDuty(gd.dataset.sid); return; }
 });
 document.addEventListener('change', function(e) {
   var ds = e.target.closest('.cp-drive-sel');
