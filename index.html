@@ -571,6 +571,24 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
           <option>1・2・3年</option>
           <option>4・5・6年</option>
         </select>
+        <label>種別</label>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button type="button" id="type-btn-practice" onclick="setNewSchedType('練習')" style="flex:1;padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid var(--green);background:var(--green);color:white;">練習</button>
+          <button type="button" id="type-btn-match" onclick="setNewSchedType('試合')" style="flex:1;padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid #ddd;background:white;color:#888;">試合</button>
+        </div>
+        <div id="new-sched-matchname-area" style="display:none;margin-bottom:10px;">
+          <label>試合名</label>
+          <div style="display:flex;gap:6px;">
+            <select id="new-sched-matchname" style="flex:1;margin-bottom:0;">
+              <option value="">選択してください</option>
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="showAddMatchNameInput()">＋新規</button>
+          </div>
+          <div id="new-matchname-input-area" style="display:none;margin-top:6px;">
+            <input type="text" id="new-matchname-text" placeholder="例: 板橋チャレンジカップ">
+            <button class="btn btn-primary btn-sm" onclick="addNewMatchNameToSched()" style="margin-top:4px;width:100%;">試合名を登録して選択</button>
+          </div>
+        </div>
         <label>場所</label>
         <div style="display:flex;gap:6px;margin-bottom:6px;">
           <select id="new-sched-venue" style="flex:1;margin-bottom:0;">
@@ -1391,7 +1409,52 @@ function showAddScheduleModal() {
   var venues = getVenues();
   sel.innerHTML = '<option value="">選択または入力</option>' +
     venues.map(function(v){return '<option value="'+v+'">'+v+'</option>';}).join('');
+  // 種別を「練習」に初期化
+  setNewSchedType('練習');
+  // 試合名プルダウンを埋める
+  var mnSel = document.getElementById('new-sched-matchname');
+  if (mnSel) {
+    var mNames = getMatchNames();
+    mnSel.innerHTML = '<option value="">選択してください</option>' +
+      mNames.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('');
+  }
   document.getElementById('modal-add-schedule').style.display = 'flex';
+}
+
+var _newSchedType = '練習';
+function setNewSchedType(type) {
+  _newSchedType = type;
+  var pBtn = document.getElementById('type-btn-practice');
+  var mBtn = document.getElementById('type-btn-match');
+  var mArea = document.getElementById('new-sched-matchname-area');
+  if (type === '試合') {
+    mBtn.style.background = 'var(--green)'; mBtn.style.color = 'white'; mBtn.style.border = '2px solid var(--green)';
+    pBtn.style.background = 'white'; pBtn.style.color = '#888'; pBtn.style.border = '2px solid #ddd';
+    if (mArea) mArea.style.display = 'block';
+  } else {
+    pBtn.style.background = 'var(--green)'; pBtn.style.color = 'white'; pBtn.style.border = '2px solid var(--green)';
+    mBtn.style.background = 'white'; mBtn.style.color = '#888'; mBtn.style.border = '2px solid #ddd';
+    if (mArea) mArea.style.display = 'none';
+  }
+}
+
+function showAddMatchNameInput() {
+  var area = document.getElementById('new-matchname-input-area');
+  area.style.display = area.style.display === 'none' ? 'block' : 'none';
+}
+
+function addNewMatchNameToSched() {
+  var txt = document.getElementById('new-matchname-text').value.trim();
+  if (!txt) { showToast('試合名を入力してください'); return; }
+  var names = getMatchNames();
+  if (!names.includes(txt)) { names.push(txt); saveMatchNames(names); }
+  var sel = document.getElementById('new-sched-matchname');
+  var opt = document.createElement('option');
+  opt.value = txt; opt.text = txt; sel.add(opt);
+  sel.value = txt;
+  document.getElementById('new-matchname-text').value = '';
+  document.getElementById('new-matchname-input-area').style.display = 'none';
+  showToast('試合名を登録しました');
 }
 
 function showAddVenueInput() {
@@ -1421,17 +1484,25 @@ function addSchedule() {
   var tEnd    = document.getElementById('new-sched-time-end').value;
   var note    = document.getElementById('new-sched-note').value.trim();
   var carpool = document.getElementById('new-sched-carpool').checked;
+  var schedType = _newSchedType || '練習';
+  var matchName = schedType === '試合' ? document.getElementById('new-sched-matchname').value : '';
   if (!date)  { showToast('日付を入力してください'); return; }
   if (!place) { showToast('場所を選択してください'); return; }
+  if (schedType === '試合' && !matchName) { showToast('試合名を選択してください'); return; }
   // 場所と時間を結合（例: 高島平多目的 8:50~11:00）
   var timeStr = tStart && tEnd ? ' ' + tStart + '〜' + tEnd : tStart ? ' ' + tStart + '〜' : '';
   var venue = place + timeStr;
+  // 試合の場合、noteの先頭に試合名を付与（カード表示で🏆抽出される）
+  var finalNote = note;
+  if (schedType === '試合' && matchName) {
+    finalNote = matchName + (note ? ' ' + note : '');
+  }
   var id = date + '_' + grade;
   var scheds = getSchedules();
   // 同じIDがあれば連番で回避
   var n = 2;
   while (scheds.find(function(s){return s.id===id;})) { id = date+'_'+grade+'_'+n; n++; }
-  scheds.push({id:id, date:date, grade:grade, venue:venue, note:note, carpool:carpool, archived:false, locked:false, _createdAt: Date.now()});
+  scheds.push({id:id, date:date, grade:grade, venue:venue, note:finalNote, carpool:carpool, schedType:schedType, matchName:matchName, archived:false, locked:false, _createdAt: Date.now()});
   scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
   // 現在の日程IDだけに絞り込む
   var validIds = scheds.map(function(s){return s.id;});
@@ -2267,9 +2338,9 @@ function renderAttendancePage() {
         '</div>' +
         // 詳細情報：アイコン付き行
         '<div style="background:#f8faf9;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:14px;line-height:1.9;">' +
-          (vTime  ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:18px;text-align:center;flex-shrink:0;">🕐</span><span style="color:var(--text);font-weight:600;">' + vTime + '</span></div>' : '') +
           (vPlace ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:18px;text-align:center;flex-shrink:0;">📍</span><span style="color:var(--text);">' + vPlace + '</span></div>' : '') +
-          (matchNameLabel ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:18px;text-align:center;flex-shrink:0;">🏆</span><span style="color:var(--text);">' + matchNameLabel + '</span></div>' : '') +
+          (vTime  ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:18px;text-align:center;flex-shrink:0;">🕐</span><span style="color:var(--text);font-weight:600;">' + vTime + '</span></div>' : '') +
+          '<div style="display:flex;align-items:center;gap:8px;"><span style="width:18px;text-align:center;flex-shrink:0;">' + (s.schedType==='試合'?'🏆':'⚽') + '</span><span style="color:var(--text);font-weight:600;">' + (s.schedType==='試合' ? ('試合' + (matchNameLabel ? '（'+matchNameLabel+'）' : '')) : '練習') + '</span></div>' +
           (noteText ? '<div style="display:flex;align-items:flex-start;gap:8px;"><span style="width:18px;text-align:center;flex-shrink:0;">ℹ️</span><span style="color:var(--text-muted);">' + noteText + '</span></div>' : '') +
         '</div>' +
         '<div>' + headerRow + rows + '</div>' +
