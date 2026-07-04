@@ -2227,28 +2227,50 @@ function renderAttendancePage() {
     });
 
     var cardBg = s.color === 'yellow' ? 'background:#fffde7;' : s.color === 'gray' ? 'background:#f0f0f0;' : '';
+    // venueから場所と時間を分離
+    var vTimeMatch = s.venue.match(/(\d{1,2}:\d{2})[〜~](\d{1,2}:\d{2})/);
+    var vPlace = vTimeMatch ? s.venue.replace(/\s*\d{1,2}:\d{2}[〜~]\d{1,2}:\d{2}/, '').trim() : s.venue;
+    var vTime = vTimeMatch ? (vTimeMatch[1] + '〜' + vTimeMatch[2]) : '';
+    // note から試合名と備考を分離（試合名マスタに一致するものを試合名扱い）
+    var mNames = getMatchNames();
+    var matchNameLabel = '';
+    var noteText = s.note || '';
+    mNames.forEach(function(mn){
+      if (noteText.indexOf(mn) === 0) { matchNameLabel = mn; noteText = noteText.replace(mn, '').trim(); }
+    });
+
     html +=
-      '<div class="card" style="'+(locked?'opacity:0.85;border:1.5px solid #f5c0bb;':'')+cardBg+'">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">' +
-          '<div>' +
+      '<div class="card" style="'+(locked?'opacity:0.85;border:1.5px solid #f5c0bb;':'')+cardBg+'padding:14px;">' +
+        // 上段：日付＋バッジ / 右側に参加人数・編集
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px;">' +
+          '<div style="flex:1;min-width:0;">' +
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
-              '<div style="font-size:17px;font-weight:700;color:var(--green);">' + dateLabel + '</div>' +
+              '<span style="font-size:19px;font-weight:800;color:var(--green);">' + dateLabel + '</span>' +
               lockBadge +
-              (assigned ? '<span style="background:#2d7a4f;color:white;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">当番: '+assigned+'</span>' : '') +
-              (s.gradeDuty ? '<span style="background:#fde3e5;color:#c8202f;border:1px solid #f5c0bb;border-radius:5px;font-size:11px;font-weight:700;padding:2px 10px;">学年当番</span>' : '') +
+              (assigned ? '<span style="background:#e8f5ee;color:#2d7a4f;border:1px solid #a8d5b8;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">当番:'+assigned+'</span>' : '') +
+              (s.gradeDuty ? '<span style="background:#fde3e5;color:#c8202f;border:1px solid #f5c0bb;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">学年当番</span>' : '') +
             '</div>' +
-            '<div style="font-size:16px;color:var(--text);font-weight:600;margin-top:2px;">' + s.grade + '</div>' +
-            '<div style="font-size:16px;color:var(--text-muted);">' + s.venue + '</div>' +
-            (s.note ? '<div style="font-size:11px;color:var(--red);margin-top:2px;">' + s.note + '</div>' : '') +
+            '<div style="font-size:15px;color:var(--text);font-weight:700;margin-top:4px;">' + s.grade + '</div>' +
           '</div>' +
-          '<div style="display:flex;align-items:center;gap:6px;">' +
-            '<div style="font-size:13px;font-weight:700;color:var(--green);white-space:nowrap;">参加選手 ' + totalPlayers + '名</div>' +
-            (isAdmin() ? '<button class="edit-sched-btn" data-sid="'+s.id+'" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;font-size:13px;cursor:pointer;padding:2px 7px;">✏️</button>' : '') +
-            (isAdmin()
-              ? '<button class="carpool-toggle-btn" data-sid="'+s.id+'" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;border:none;cursor:pointer;'+(s.carpool?'background:#fff3cd;color:#b7950b;':'background:#f0f0f0;color:#888;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</button>'
-              : '<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;'+(s.carpool?'background:#fff3cd;color:#b7950b;':'background:#f0f0f0;color:#888;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</span>') +
-            (isAdmin() ? '<button class="del-sched-btn" data-sid="'+s.id+'" style="background:none;border:none;color:#ccc;font-size:16px;cursor:pointer;padding:0;">🗑</button>' : '') +
+          '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">' +
+            '<div style="display:flex;align-items:center;gap:6px;">' +
+              '<span style="font-size:13px;font-weight:700;color:var(--green);white-space:nowrap;">参加選手 ' + totalPlayers + '名</span>' +
+              (isAdmin() ? '<button class="edit-sched-btn" data-sid="'+s.id+'" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;font-size:13px;cursor:pointer;padding:3px 7px;">✏️</button>' : '') +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:6px;">' +
+              (isAdmin()
+                ? '<button class="carpool-toggle-btn" data-sid="'+s.id+'" style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;border:none;cursor:pointer;white-space:nowrap;'+(s.carpool?'background:#fde3e5;color:#c8202f;':'background:#f0f0f0;color:#888;')+'">🚗 '+(s.carpool?'配車あり':'配車なし')+'</button>'
+                : (s.carpool ? '<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;background:#fde3e5;color:#c8202f;white-space:nowrap;">🚗 配車あり</span>' : '')) +
+              (isAdmin() ? '<button class="del-sched-btn" data-sid="'+s.id+'" style="background:none;border:none;color:#ccc;font-size:16px;cursor:pointer;padding:0;">🗑</button>' : '') +
+            '</div>' +
           '</div>' +
+        '</div>' +
+        // 詳細情報：アイコン付き行
+        '<div style="background:#f8faf9;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:14px;line-height:1.9;">' +
+          (vTime  ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:18px;text-align:center;flex-shrink:0;">🕐</span><span style="color:var(--text);font-weight:600;">' + vTime + '</span></div>' : '') +
+          (vPlace ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:18px;text-align:center;flex-shrink:0;">📍</span><span style="color:var(--text);">' + vPlace + '</span></div>' : '') +
+          (matchNameLabel ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:18px;text-align:center;flex-shrink:0;">🏆</span><span style="color:var(--text);">' + matchNameLabel + '</span></div>' : '') +
+          (noteText ? '<div style="display:flex;align-items:flex-start;gap:8px;"><span style="width:18px;text-align:center;flex-shrink:0;">ℹ️</span><span style="color:var(--text-muted);">' + noteText + '</span></div>' : '') +
         '</div>' +
         '<div>' + headerRow + rows + '</div>' +
       '</div>';
