@@ -2235,9 +2235,7 @@ function renderAttendancePage() {
               '<div style="font-size:17px;font-weight:700;color:var(--green);">' + dateLabel + '</div>' +
               lockBadge +
               (assigned ? '<span style="background:#2d7a4f;color:white;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">当番: '+assigned+'</span>' : '') +
-              (isAdmin()
-                ? '<button class="grade-duty-btn" data-sid="'+s.id+'" style="border-radius:5px;font-size:11px;font-weight:700;padding:3px 10px;cursor:pointer;border:1.5px solid '+(s.gradeDuty?'#2d7a4f':'#ddd')+';background:'+(s.gradeDuty?'#2d7a4f':'white')+';color:'+(s.gradeDuty?'white':'#888')+';">学年当番'+(s.gradeDuty?' ✓':'')+'</button>'
-                : (s.gradeDuty ? '<span style="background:#e6a817;color:white;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">学年当番</span>' : '')) +
+              (s.gradeDuty ? '<span style="background:#fde3e5;color:#c8202f;border:1px solid #f5c0bb;border-radius:5px;font-size:11px;font-weight:700;padding:2px 10px;">学年当番</span>' : '') +
             '</div>' +
             '<div style="font-size:16px;color:var(--text);font-weight:600;margin-top:2px;">' + s.grade + '</div>' +
             '<div style="font-size:16px;color:var(--text-muted);">' + s.venue + '</div>' +
@@ -2984,7 +2982,6 @@ function renderDutyPage() {
             '<div>' +
               '<span style="font-size:14px;font-weight:700;color:var(--green);">' + dateLabel + '</span>' +
               '<span style="font-size:12px;color:var(--text-muted);margin-left:6px;">' + s.grade + '</span>' +
-              (s.gradeDuty ? '<span style="background:#e6a817;color:white;border-radius:5px;font-size:10px;font-weight:700;padding:2px 7px;margin-left:6px;">学年当番</span>' : '') +
             '</div>' +
             (assigned
               ? '<div style="display:flex;align-items:center;gap:6px;">' +
@@ -2992,6 +2989,11 @@ function renderDutyPage() {
                   '<button class="duty-clear-btn" data-sid="'+s.id+'" style="background:none;border:none;color:#ccc;font-size:13px;cursor:pointer;">✕</button>' +
                 '</div>'
               : '<span style="font-size:11px;color:#ccc;">未確定</span>') +
+          '</div>' +
+          '<div style="margin-bottom:6px;">' +
+            '<button class="grade-duty-btn" data-sid="'+s.id+'" style="border-radius:6px;font-size:12px;font-weight:700;padding:5px 14px;cursor:pointer;border:1.5px solid '+(s.gradeDuty?'#c8202f':'#f5c0bb')+';background:'+(s.gradeDuty?'#fde3e5':'white')+';color:#c8202f;">' +
+              (s.gradeDuty?'✓ ':'') + '学年当番' +
+            '</button>' +
           '</div>' +
           (candidates.length > 0
             ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">候補（★ = 推奨）</div>' +
