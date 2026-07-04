@@ -495,22 +495,17 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
     <button class="btn btn-outline" onclick="addMatch()">＋ 試合を追加</button>
   </div>
 
-  <!-- 共有用結果カード -->
-  <div id="result-share-card" style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.12);margin:14px 0 10px;">
+  <!-- 共有用結果カード（非表示・shareResult用に保持） -->
+  <div id="result-share-card" style="display:none;background:white;border-radius:16px;overflow:hidden;margin:14px 0 10px;">
     <div style="background:var(--green);padding:14px 16px 12px;">
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:white;letter-spacing:1px;">⚽ FC KUMANO</div>
       <div id="rs-meta" style="font-size:11px;color:rgba(255,255,255,0.85);margin-top:3px;"></div>
     </div>
     <div id="rs-matches" style="padding:12px 14px;"></div>
   </div>
-  <div style="background:#f8f8f8;border-radius:12px;padding:12px 14px;margin-bottom:10px;font-size:12px;color:var(--text-muted);line-height:1.7;">
-    📸 <b>スクショ→LINE送信の手順</b><br>
-    ① 上の結果カードをスクリーンショット<br>
-    ② LINEを開いてトークルームに画像を送信
-  </div>
 
   <!-- ①LINEで共有 -->
-  <button class="btn btn-share btn-full" onclick="shareResult()" style="margin-bottom:8px;">① 📤 LINEで共有</button>
+  <button class="btn btn-share btn-full" onclick="shareResult()" style="margin-top:14px;margin-bottom:8px;">① 📤 LINEで共有</button>
   <!-- ②試合結果を保存 -->
   <button class="btn btn-full" id="btn-finish-match" onclick="submitToSummary()" style="margin-bottom:8px;background:#e74c3c;color:white;font-weight:700;font-size:15px;padding:14px;border:none;border-radius:10px;cursor:pointer;">
     ② 💾 試合結果を保存（まとめに記録）
@@ -2360,7 +2355,7 @@ var _i18n = {
     setting_delete: '🗑 日程の一括削除',
     setting_gas: '🔌 Google連携設定',
     add_match: '＋ 試合を追加',
-    finish_match: '💾 試合結果を保存',
+    finish_match: '② 💾 試合結果を保存（まとめに記録）',
     view_result: '🏆 試合結果を確認・共有',
     family_not_set: '家族が設定されていません',
     family_not_set_desc: '出欠確認を入力するにはまず家族を選択してください',
@@ -2443,7 +2438,7 @@ var _i18n = {
     setting_gas_guide: '📋 GAS Setup Guide',
     setting_install: '📱 Add to Home Screen',
     add_match: '＋ Add Match',
-    finish_match: '💾 Save Match Results',
+    finish_match: '② 💾 Save Match Results',
     view_result: '🏆 View & Share Results',
     family_not_set: 'Family not set',
     family_not_set_desc: 'Please select your family to enter attendance.',
