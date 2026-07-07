@@ -2388,13 +2388,14 @@ function renderOverviewPage() {
     var vPlace = vTimeMatch ? s.venue.replace(/\s*\d{1,2}:\d{2}[〜~]\d{1,2}:\d{2}/, '').trim() : s.venue;
     var vTime = vTimeMatch ? (vTimeMatch[1] + '〜' + vTimeMatch[2]) : '';
     // 出席状況集計
-    var attend = 0, hold = 0, absent = 0, duty_ng = 0;
+    var attend = 0, hold = 0, absent = 0, noreply = 0;
     parents.forEach(function(p){
       var v = att[p];
       if (v === '◯') attend++;
-      else if (v === '●') { attend++; duty_ng++; }
+      else if (v === '●') attend++;
       else if (v === '△') hold++;
       else if (v === '×') absent++;
+      else noreply++; // 未回答
     });
     // 参加選手合計
     var totalPlayers = 0;
@@ -2414,14 +2415,19 @@ function renderOverviewPage() {
             (vPlace ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">📍</span><span>' + vPlace + '</span></div>' : '') +
             (vTime ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">🕐</span><span>' + vTime + '</span></div>' : '') +
             '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">' + (s.schedType==='試合'?'🏆':'⚽') + '</span><span>' + (s.schedType==='試合'?('試合'+(s.matchName?'（'+s.matchName+'）':'')):'練習') + '</span></div>' +
-            (s.carpool ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">🚗</span><span style="color:#c8202f;font-weight:700;">配車あり</span></div>' : '') +
+            (s.carpool
+              ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">🚗</span><span style="color:#c8202f;font-weight:700;">配車あり</span></div>'
+              : '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">🚗</span><span style="color:#aaa;">配車なし</span></div>') +
           '</div>' +
-          // 右列：当番・参加・出席サマリ
-          '<div style="text-align:right;font-size:14px;line-height:2.0;min-width:140px;">' +
-            (assigned ? '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;"><span>🥇</span><span style="font-weight:700;">当番：' + assigned + '</span></div>' : '') +
-            (s.gradeDuty ? '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;"><span>🥇</span><span style="font-weight:700;color:#c8202f;">学年当番</span></div>' : '') +
-            '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;"><span>' + (s.schedType==='試合'?'⚽':'👥') + '</span><span style="font-weight:700;color:var(--green);">参加：' + totalPlayers + '名</span></div>' +
-            '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">(出席' + attend + ', 保留' + hold + ', 欠席' + absent + ')</div>' +
+          // 右列：学年当番・当番・参加・出欠状況
+          '<div style="text-align:right;font-size:14px;line-height:2.0;min-width:150px;">' +
+            (s.gradeDuty ? '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;"><span>📣</span><span style="font-weight:700;color:#c8202f;">学年当番</span></div>' : '') +
+            (assigned ? '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;"><span>🔔</span><span style="font-weight:700;">当番：' + assigned + '</span></div>' : '') +
+            '<div style="height:14px;"></div>' +
+            '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;"><span>' + (s.schedType==='試合'?'⚽':'👥') + '</span><span style="font-weight:700;color:var(--green);">参加選手：' + totalPlayers + '名</span></div>' +
+            '<div style="font-size:12px;color:var(--text-muted);line-height:1.7;margin-top:2px;">' +
+              '出席 ' + attend + ' / 保留 ' + hold + ' / 欠席 ' + absent + ' / 未回答 ' + noreply +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>';
