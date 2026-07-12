@@ -1814,10 +1814,33 @@ async function savePlayers() {
 
 async function saveMatches() {
   localStorage.setItem('fc_matches', JSON.stringify(matches));
+  // 内容が変わったので保存済み状態をリセット
+  _lastSavedHash = '';
+  var btn = document.getElementById('btn-finish-match');
+  if (btn && !_isSaving && btn.innerHTML.indexOf('保存済み') >= 0) {
+    btn.innerHTML = '② 💾 試合結果を保存（まとめに記録）';
+    btn.style.background = '#e74c3c';
+  }
 }
 
+var _lastSavedHash = ''; // 最後に保存した内容のハッシュ
+var _isSaving = false;
+
 async function submitToSummary() {
+  if (_isSaving) return; // 送信中は無視（連打防止）
   if (!matches.length) { showToast('試合データがありません'); return; }
+
+  const btn = document.getElementById('btn-finish-match');
+  // 現在の内容のハッシュを作成
+  const contentHash = JSON.stringify(matches.map(function(m){
+    return {v:m.venue, o:m.opponent, s:m.scores, sc:m.scorers};
+  })) + (reportMeta.date || '');
+
+  // 同じ内容が既に保存済みなら確認
+  if (contentHash === _lastSavedHash) {
+    if (!confirm('この内容は既に保存済みです。もう一度保存しますか？')) return;
+  }
+
   const date = reportMeta.date || new Date().toISOString().split('T')[0];
   const grade = reportMeta.grade || 'FC熊野';
   const nendo = getNendo(date);
@@ -1831,11 +1854,19 @@ async function submitToSummary() {
     if (k > o) win++;
     else if (k < o) lose++;
     else draw++;
-    // 得点者集計
     (m.scorers || []).forEach(function(s) {
       const p = players.find(function(x){ return x.id === s.playerId; });
       if (p) scorers[p.name] = (scorers[p.name] || 0) + 1;
     });
+  }
+
+  // ボタンを「保存中」状態に
+  _isSaving = true;
+  var origText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.innerHTML = '⏳ 保存中...';
+    btn.style.opacity = '0.6';
+    btn.disabled = true;
   }
 
   try {
@@ -1843,8 +1874,30 @@ async function submitToSummary() {
       action: 'addMatchRecord',
       data: JSON.stringify({nendo, date, grade, win, lose, draw, gf, ga, scorers, matches})
     });
-    showToast('✅ 保存しました。まとめタブに反映されます');
+    _lastSavedHash = contentHash;
+    // 保存完了の演出
+    if (btn) {
+      btn.innerHTML = '✅ 保存しました！';
+      btn.style.background = '#2d7a4f';
+      btn.style.opacity = '1';
+    }
+    showToast('✅ まとめタブに記録しました');
+    // 2秒後に「保存済み」表示へ
+    setTimeout(function() {
+      if (btn) {
+        btn.innerHTML = '✓ 保存済み（もう一度保存する場合はタップ）';
+        btn.style.background = '#7a9b88';
+        btn.disabled = false;
+      }
+      _isSaving = false;
+    }, 2000);
   } catch(e) {
+    if (btn) {
+      btn.innerHTML = origText;
+      btn.style.opacity = '1';
+      btn.disabled = false;
+    }
+    _isSaving = false;
     showToast('❌ 保存失敗: ' + e.message);
   }
 }
@@ -2683,7 +2736,7 @@ function applyLang() {
   var btnArchive = document.getElementById('btn-archive');
   if (btnArchive) btnArchive.textContent = t('archive');
   var btnFinish = document.getElementById('btn-finish-match');
-  if (btnFinish) btnFinish.textContent = t('finish_match');
+  if (btnFinish && btnFinish.innerHTML.indexOf('保存済み') < 0 && btnFinish.innerHTML.indexOf('保存中') < 0 && btnFinish.innerHTML.indexOf('保存しました') < 0) btnFinish.textContent = t('finish_match');
   var btnResult = document.getElementById('btn-view-result');
   if (btnResult) btnResult.textContent = t('view_result');
   var idMap = {
