@@ -388,6 +388,15 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
         <button class="btn btn-primary btn-full" onclick="addMatchName()">＋ 試合名を追加</button>
         <div id="match-name-list" style="margin-top:10px;"><div class="empty-state">まだ登録されていません</div></div>
       </div>
+      <!-- 対戦相手マスタ -->
+      <div class="card">
+        <div class="card-title">⚔️ 対戦相手を登録</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">試合カードの相手チームプルダウンに表示されます</div>
+        <label>相手チーム名</label>
+        <input type="text" id="input-opponent" placeholder="例: 板橋FC">
+        <button class="btn btn-primary btn-full" onclick="addOpponentMaster()">＋ 相手チームを追加</button>
+        <div id="opponent-list" style="margin-top:10px;"><div class="empty-state">まだ登録されていません</div></div>
+      </div>
       <!-- 自分の家族 -->
       <div class="card" id="my-family-card" style="border:2px solid var(--green);">
         <div class="card-title" id="ct-my-family">👤 自分の家族</div>
@@ -931,6 +940,19 @@ function getMatchNames() {
 }
 function saveMatchNames(arr) { localStorage.setItem('fc_match_names', JSON.stringify(arr)); pushMasterToCloud(); }
 
+// 対戦相手マスタ
+function getOpponents() {
+  return JSON.parse(localStorage.getItem('fc_opponents') || '[]');
+}
+function saveOpponents(arr) { localStorage.setItem('fc_opponents', JSON.stringify(arr)); pushMasterToCloud(); }
+function addOpponentToMaster(name) {
+  name = (name||'').trim();
+  if (!name) return false;
+  var arr = getOpponents();
+  if (arr.indexOf(name) < 0) { arr.push(name); saveOpponents(arr); }
+  return true;
+}
+
 function addMatchName() {
   var name = document.getElementById('input-match-name').value.trim();
   if (!name) { showToast('試合名を入力してください'); return; }
@@ -958,6 +980,61 @@ function renderMatchNames() {
     arr.map(function(name) {
       return '<div class="player-chip"><span>' + name + '</span>' +
         '<button onclick="removeMatchName(\'' + name + '\')">✕</button></div>';
+    }).join('') + '</div>';
+}
+
+function addOpponentMaster() {
+  var inp = document.getElementById('input-opponent');
+  var name = inp.value.trim();
+  if (!name) { showToast('相手チーム名を入力してください'); return; }
+  var arr = getOpponents();
+  if (arr.indexOf(name) >= 0) { showToast('すでに登録されています'); return; }
+  arr.push(name);
+  saveOpponents(arr);
+  inp.value = '';
+  renderOpponents();
+  showToast(name + ' を登録しました ✅');
+}
+
+function removeOpponent(name) {
+  var arr = getOpponents().filter(function(n){return n!==name;});
+  saveOpponents(arr);
+  renderOpponents();
+}
+
+function editOpponent(name) {
+  var newName = prompt('相手チーム名を編集', name);
+  if (newName === null) return;
+  newName = newName.trim();
+  if (!newName) { showToast('名前を入力してください'); return; }
+  var arr = getOpponents();
+  var idx = arr.indexOf(name);
+  if (idx < 0) return;
+  if (arr.indexOf(newName) >= 0 && newName !== name) { showToast('同じ名前が既にあります'); return; }
+  arr[idx] = newName;
+  saveOpponents(arr);
+  // 既存の試合データの相手名も更新
+  matches.forEach(function(m){ if (m.opponent === name) m.opponent = newName; });
+  saveMatches();
+  renderOpponents();
+  renderAllMatches();
+  showToast('相手チーム名を変更しました');
+}
+
+function renderOpponents() {
+  var el = document.getElementById('opponent-list');
+  if (!el) return;
+  var arr = getOpponents();
+  if (!arr.length) { el.innerHTML = '<div class="empty-state">まだ登録されていません</div>'; return; }
+  el.innerHTML = '<div style="display:flex;flex-direction:column;gap:6px;">' +
+    arr.map(function(name) {
+      return '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--accent-light);border:1px solid var(--accent-border);border-radius:8px;padding:8px 12px;">' +
+        '<span style="font-size:14px;font-weight:600;">' + name + '</span>' +
+        '<div style="display:flex;gap:4px;">' +
+          '<button onclick="editOpponent(\'' + name + '\')" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;cursor:pointer;font-size:12px;padding:3px 7px;">✏️</button>' +
+          '<button onclick="removeOpponent(\'' + name + '\')" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:15px;padding:2px 4px;">✕</button>' +
+        '</div>' +
+      '</div>';
     }).join('') + '</div>';
 }
 function getMyFamily() {
@@ -1200,6 +1277,7 @@ function pushMasterNow() {
     parents:    JSON.parse(localStorage.getItem('fc_parents') || '[]'),
     venues:     JSON.parse(localStorage.getItem('fc_venues') || '[]'),
     matchNames: JSON.parse(localStorage.getItem('fc_match_names') || '[]'),
+      opponents:  JSON.parse(localStorage.getItem('fc_opponents') || '[]'),
     carpool:    JSON.parse(localStorage.getItem('fc_carpool') || '{}'),
     duty:       JSON.parse(localStorage.getItem('fc_duty') || '{}'),
     attPlayers: JSON.parse(localStorage.getItem('fc_family_players') || '{}'),
@@ -1776,7 +1854,10 @@ function renderPlayers() {
           '<span class="drag-handle" style="cursor:grab;color:#999;font-size:18px;padding:4px 6px;touch-action:none;user-select:none;-webkit-user-select:none;">≡</span>' +
           '<span style="font-size:14px;font-weight:600;color:var(--text);">' + p.name + '</span>' +
         '</div>' +
-        '<button onclick="removePlayer(' + p.id + ')" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:15px;padding:2px 4px;">✕</button>' +
+        '<div style="display:flex;align-items:center;gap:4px;">' +
+          '<button onclick="editPlayerName(' + p.id + ')" style="background:none;border:1px solid #ddd;border-radius:6px;color:#888;cursor:pointer;font-size:12px;padding:3px 7px;">✏️</button>' +
+          '<button onclick="removePlayer(' + p.id + ')" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:15px;padding:2px 4px;">✕</button>' +
+        '</div>' +
       '</div>';
     }).join('') + '</div>';
   const cnt = document.getElementById('player-count');
@@ -1802,6 +1883,32 @@ async function removePlayer(id) {
   await savePlayers();
   renderPlayers();
   renderAllMatches();
+}
+
+async function editPlayerName(id) {
+  var p = players.find(function(x){return x.id===id;});
+  if (!p) return;
+  var newName = prompt('選手名を編集', p.name);
+  if (newName === null) return;
+  newName = newName.trim();
+  if (!newName) { showToast('名前を入力してください'); return; }
+  if (players.some(function(x){return x.id!==id && x.name===newName;})) { showToast('同じ名前が既にあります'); return; }
+  p.name = newName;
+  await savePlayers();
+  renderPlayers();
+  renderAllMatches();
+  showToast('選手名を変更しました');
+}
+
+function addOpponentInline(matchId) {
+  var name = prompt('相手チーム名を入力');
+  if (name === null) return;
+  name = name.trim();
+  if (!name) return;
+  addOpponentToMaster(name);
+  updateField(matchId, 'opponent', name);
+  renderAllMatches();
+  showToast('相手チームを登録しました');
 }
 
 async function savePlayers() {
@@ -2017,6 +2124,7 @@ function openSettings() {
       renderPlayers();
       renderFamilies();
       renderMatchNames();
+      renderOpponents();
       renderVenues();
       updateMyFamilyDisplay();
     });
@@ -2024,6 +2132,7 @@ function openSettings() {
     renderPlayers();
     renderFamilies();
     renderMatchNames();
+    renderOpponents();
     renderVenues();
   }
 }
@@ -2049,6 +2158,7 @@ function pushMasterToCloud() {
       parents:    JSON.parse(localStorage.getItem('fc_parents') || '[]'),
       venues:     JSON.parse(localStorage.getItem('fc_venues') || '[]'),
       matchNames: JSON.parse(localStorage.getItem('fc_match_names') || '[]'),
+      opponents:  JSON.parse(localStorage.getItem('fc_opponents') || '[]'),
       carpool:    JSON.parse(localStorage.getItem('fc_carpool') || '{}'),
       duty:       JSON.parse(localStorage.getItem('fc_duty') || '{}'),
       attPlayers: JSON.parse(localStorage.getItem('fc_family_players') || '{}'),
@@ -2074,6 +2184,7 @@ async function pullMasterFromCloud() {
     if (Array.isArray(master.parents))    { localStorage.setItem('fc_parents',     JSON.stringify(master.parents));    _parentsCache = null; }
     if (Array.isArray(master.venues))     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
     if (Array.isArray(master.matchNames)) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
+    if (Array.isArray(master.opponents))  { localStorage.setItem('fc_opponents',   JSON.stringify(master.opponents));  }
     if (master.carpool && typeof master.carpool === 'object' && !_masterPushing && (Date.now() - _carpoolEditTime > 30000)) { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
     if (master.duty    && typeof master.duty    === 'object' && !_masterPushing && (Date.now() - _dutyEditTime > 30000)) { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
     if (master.attPlayers && typeof master.attPlayers === 'object' && !_masterPushing) { localStorage.setItem('fc_family_players', JSON.stringify(master.attPlayers)); }
@@ -2131,6 +2242,7 @@ function startAutoSync() {
       }
       if (Array.isArray(master.venues))     localStorage.setItem('fc_venues',      JSON.stringify(master.venues));
       if (Array.isArray(master.matchNames)) localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames));
+      if (Array.isArray(master.opponents)) localStorage.setItem('fc_opponents', JSON.stringify(master.opponents));
       if (master.carpool && typeof master.carpool==='object' && !_masterPushing && (Date.now() - _carpoolEditTime > 30000)) {
         var curCp = localStorage.getItem('fc_carpool') || '{}';
         var nwCp = JSON.stringify(master.carpool);
@@ -2940,7 +3052,12 @@ function renderAllMatches() {
       </div>
       <div class="match-body">
         <div class="form-row" style="margin-bottom:4px;">
-          <div><label>相手チーム</label><input type="text" value="${m.opponent}" placeholder="チーム名" oninput="updateField(${m.id},'opponent',this.value)"></div>
+          <div><label>相手チーム</label>
+            <div style="display:flex;gap:4px;">
+              <select onchange="updateField(${m.id},'opponent',this.value)" style="margin:0;flex:1;">${(()=>{const opps=getOpponents();const opts=['<option value="">選択してください</option>',...opps.map(n=>`<option value="${n}" ${n===m.opponent?'selected':''}>${n}</option>`)];if(m.opponent&&!opps.includes(m.opponent))opts.push(`<option value="${m.opponent}" selected>${m.opponent}</option>`);return opts.join('');})()}</select>
+              <button class="btn btn-outline btn-sm" onclick="addOpponentInline(${m.id})" style="padding:0 10px;">＋</button>
+            </div>
+          </div>
           <div><label>試合名</label><select onchange="updateField(${m.id},'venue',this.value)" style="margin:0;">${(()=>{const names=getMatchNames();const opts=['<option value="">選択してください</option>',...names.map(n=>`<option value="${n}" ${n===m.venue?'selected':''}>${n}</option>`)];if(m.venue&&!names.includes(m.venue))opts.push(`<option value="${m.venue}" selected>${m.venue}</option>`);return opts.join('');})()}</select></div>
         </div>
 
