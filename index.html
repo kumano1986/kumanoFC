@@ -337,7 +337,6 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       </svg>
       Googleドライブ
     </a>
-    <button class="btn-sync" onclick="syncAll()" style="line-height:1;min-width:44px;min-height:44px;font-size:20px;">🔄</button>
     <button onclick="openSettings()" style="background:rgba(255,255,255,0.18);color:white;border:1px solid rgba(255,255,255,0.3);padding:5px 10px;border-radius:8px;font-size:16px;cursor:pointer;line-height:1;">⚙️</button>
   </div>
 </header>
@@ -1807,7 +1806,7 @@ async function gasReq(params) {
 
 async function syncAll() {
   if (!gasUrl) return;
-  document.getElementById('sync-status').textContent = '同期中...';
+  var _ss = document.getElementById('sync-status'); if (_ss) _ss.textContent = '同期中...';
   pullMasterFromCloud().then(function() {
     renderAttendancePage();
   }).catch(function(){});
@@ -1828,7 +1827,7 @@ async function syncAll() {
     renderPlayers();
     renderAllMatches();
   } catch(e) {
-    document.getElementById('sync-status').textContent = '同期失敗';
+    var _ss2 = document.getElementById('sync-status'); if (_ss2) _ss2.textContent = '同期失敗';
     players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
     matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
     matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
