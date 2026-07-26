@@ -726,7 +726,7 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
     <div id="duty-list"></div>
   </div>
   <div class="card">
-    <div class="card-title">月別 当番回数</div>
+    <div class="card-title">累計 当番回数</div>
     <div id="duty-monthly"></div>
   </div>
 </div>
@@ -1280,6 +1280,7 @@ function pushMasterNow() {
     carpool:    JSON.parse(localStorage.getItem('fc_carpool') || '{}'),
     duty:       JSON.parse(localStorage.getItem('fc_duty') || '{}'),
     attPlayers: JSON.parse(localStorage.getItem('fc_family_players') || '{}'),
+      dutyTotal:  JSON.parse(localStorage.getItem('fc_duty_total') || '{}'),
     players:    JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]')
   };
   gasReq({action: 'saveMaster', data: JSON.stringify(master)})
@@ -2161,6 +2162,7 @@ function pushMasterToCloud() {
       carpool:    JSON.parse(localStorage.getItem('fc_carpool') || '{}'),
       duty:       JSON.parse(localStorage.getItem('fc_duty') || '{}'),
       attPlayers: JSON.parse(localStorage.getItem('fc_family_players') || '{}'),
+      dutyTotal:  JSON.parse(localStorage.getItem('fc_duty_total') || '{}'),
       players:    JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]')
     };
     gasReq({action: 'saveMaster', data: JSON.stringify(master)})
@@ -2256,6 +2258,11 @@ function startAutoSync() {
         var curAp = localStorage.getItem('fc_family_players') || '{}';
         var nwAp = JSON.stringify(master.attPlayers);
         if (curAp !== nwAp) { localStorage.setItem('fc_family_players', nwAp); masterChanged = true; }
+      }
+      if (master.dutyTotal && typeof master.dutyTotal==='object' && (Date.now() - _dutyEditTime > 30000)) {
+        var curDt = localStorage.getItem('fc_duty_total') || '{}';
+        var nwDt = JSON.stringify(master.dutyTotal);
+        if (curDt !== nwDt) { localStorage.setItem('fc_duty_total', nwDt); masterChanged = true; }
       }
       if (masterChanged) {
         // 配車入力中（フォーカス中）または編集直後は再描画をスキップして入力値を保護
@@ -2603,7 +2610,7 @@ function renderOverviewPage() {
 let players = [], matches = [], matchCounter = 0;
 
 // ===== データバージョン管理 =====
-const APP_DATA_VERSION = '20260710'; // 大きな仕様変更時にこの番号を上げる
+const APP_DATA_VERSION = '20260715'; // 大きな仕様変更時にこの番号を上げる
 (function checkDataVersion() {
   var savedVersion = localStorage.getItem('fc_data_version');
   if (savedVersion !== APP_DATA_VERSION) {
@@ -2733,7 +2740,7 @@ var _i18n = {
     add_venue: '＋ 場所追加',
     add_match_name: '＋ 試合名追加',
     duty_assign: '当番割当',
-    duty_monthly: '月別当番回数',
+    duty_monthly: '累計当番回数',
     select_year: '年度選択',
     yearly_record: '年度成績',
     wins: '勝', losses: '負', draws: '分',
@@ -2807,7 +2814,7 @@ var _i18n = {
     add_venue: '＋ Add Venue',
     add_match_name: '＋ Add Match Name',
     duty_assign: 'Duty Assignment',
-    duty_monthly: 'Monthly Duty Count',
+    duty_monthly: 'Total Duty Count',
     select_year: 'Select Year',
     yearly_record: 'Yearly Record',
     wins: 'W', losses: 'L', draws: 'D',
@@ -3222,18 +3229,39 @@ function saveDutyData(d) {
 
 function assignDuty(sid, name) {
   var d = getDutyData();
+  var prev = d[sid]; // 前の担当
+  // 累計カウント更新：前の担当がいれば-1、新担当を+1
+  var totals = getDutyTotals();
+  if (prev && prev !== name && totals[prev] > 0) totals[prev]--;
+  if (prev !== name) totals[name] = (totals[name] || 0) + 1;
+  saveDutyTotals(totals);
   d[sid] = name;
   saveDutyData(d);
   renderDutyPage();
-  renderAttendancePage(); // 日付横の当番名も更新
+  renderAttendancePage();
 }
 
 function clearDuty(sid) {
   var d = getDutyData();
+  var prev = d[sid];
+  if (prev) {
+    var totals = getDutyTotals();
+    if (totals[prev] > 0) { totals[prev]--; saveDutyTotals(totals); }
+  }
   delete d[sid];
   saveDutyData(d);
   renderDutyPage();
   renderAttendancePage();
+}
+
+// 累計当番回数（日程削除後も残る）
+function getDutyTotals() {
+  return JSON.parse(localStorage.getItem('fc_duty_total') || '{}');
+}
+function saveDutyTotals(t) {
+  localStorage.setItem('fc_duty_total', JSON.stringify(t));
+  _dutyEditTime = Date.now();
+  pushMasterNow();
 }
 
 function toggleGradeDuty(sid) {
@@ -3361,35 +3389,28 @@ function renderDutyPage() {
     el.innerHTML = html;
   }
 
-  // 月別推移
-  var monthly = getDutyMonthly();
-  var months = Object.keys(monthly).sort();
+  // 累計当番回数（日程を削除しても残る）
+  var totals = getDutyTotals();
+  // 現在の当番割当分もマージ（累計に未反映の可能性に備え、現データ優先ではなく累計を正とする）
   var mel = document.getElementById('duty-monthly');
   if (!mel) return;
-  if (!months.length) {
+  var parents = getParents();
+  var hasAny = parents.some(function(p){ return (totals[p]||0) > 0; });
+  if (!hasAny) {
     mel.innerHTML = '<div class="empty-state">当番を確定すると表示されます</div>';
     return;
   }
-  var mhtml = '<div style="overflow-x:auto;">';
-  // ヘッダー
-  mhtml += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  mhtml += '<tr><th style="text-align:left;padding:5px 8px;background:var(--accent-light);color:var(--green);border:1px solid var(--card-border);">家族</th>';
-  months.forEach(function(m) {
-    var label = m.replace(/^2026-/,'') + '月';
-    mhtml += '<th style="text-align:center;padding:5px 8px;background:var(--accent-light);color:var(--green);border:1px solid var(--card-border);">' + label + '</th>';
+  // 回数の多い順にソート
+  var sorted = parents.slice().sort(function(a,b){ return (totals[b]||0) - (totals[a]||0); });
+  var mhtml = '<div style="display:flex;flex-direction:column;gap:6px;">';
+  sorted.forEach(function(p) {
+    var cnt = totals[p] || 0;
+    mhtml += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:8px;background:' + (cnt>0?'#e8f5ee':'#f7f7f7') + ';border:1px solid ' + (cnt>0?'#a8d5b8':'#eee') + ';">' +
+      '<span style="font-size:14px;font-weight:600;color:' + (cnt>0?'var(--text)':'#aaa') + ';">' + p + '</span>' +
+      '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:700;color:' + (cnt>0?'var(--green)':'#ccc') + ';">' + cnt + ' 回</span>' +
+    '</div>';
   });
-  mhtml += '</tr>';
-  // 各家族
-  getParents().forEach(function(p) {
-    mhtml += '<tr><td style="padding:5px 8px;border:1px solid var(--card-border);font-weight:600;">' + p + '</td>';
-    months.forEach(function(m) {
-      var cnt = (monthly[m] && monthly[m][p]) || 0;
-      var bg = cnt > 0 ? 'background:#e8f5ee;color:#2d7a4f;font-weight:700;' : 'color:#ccc;';
-      mhtml += '<td style="text-align:center;padding:5px 8px;border:1px solid var(--card-border);' + bg + '">' + (cnt||'-') + '</td>';
-    });
-    mhtml += '</tr>';
-  });
-  mhtml += '</table></div>';
+  mhtml += '</div>';
   mel.innerHTML = mhtml;
 }
 
