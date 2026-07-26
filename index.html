@@ -1911,6 +1911,18 @@ function addOpponentInline(matchId) {
   showToast('相手チームを登録しました');
 }
 
+function addMatchNameInline(matchId) {
+  var name = prompt('試合名を入力');
+  if (name === null) return;
+  name = name.trim();
+  if (!name) return;
+  var arr = getMatchNames();
+  if (arr.indexOf(name) < 0) { arr.push(name); saveMatchNames(arr); }
+  updateField(matchId, 'venue', name);
+  renderAllMatches();
+  showToast('試合名を登録しました');
+}
+
 async function savePlayers() {
   localStorage.setItem('fc_players_permanent', JSON.stringify(players));
   localStorage.setItem('fc_players', JSON.stringify(players));
@@ -3054,7 +3066,7 @@ function renderAllMatches() {
     <div class="match-card">
       <div class="match-header">
         <div class="match-header-inner"><span class="match-num">第${m.num}試合</span></div>
-        <button class="btn btn-sm btn-dark" onclick="removeMatch(${m.id})">削除</button>
+        ${isAdmin() ? `<button class="btn btn-sm btn-dark" onclick="removeMatch(${m.id})">削除</button>` : ''}
       </div>
       <div class="match-body">
         <div class="form-row" style="margin-bottom:4px;">
@@ -3064,7 +3076,12 @@ function renderAllMatches() {
               <button class="btn btn-outline btn-sm" onclick="addOpponentInline(${m.id})" style="padding:0 10px;">＋</button>
             </div>
           </div>
-          <div><label>試合名</label><select onchange="updateField(${m.id},'venue',this.value)" style="margin:0;">${(()=>{const names=getMatchNames();const opts=['<option value="">選択してください</option>',...names.map(n=>`<option value="${n}" ${n===m.venue?'selected':''}>${n}</option>`)];if(m.venue&&!names.includes(m.venue))opts.push(`<option value="${m.venue}" selected>${m.venue}</option>`);return opts.join('');})()}</select></div>
+          <div><label>試合名</label>
+            <div style="display:flex;gap:4px;">
+              <select onchange="updateField(${m.id},'venue',this.value)" style="margin:0;flex:1;">${(()=>{const names=getMatchNames();const opts=['<option value="">選択してください</option>',...names.map(n=>`<option value="${n}" ${n===m.venue?'selected':''}>${n}</option>`)];if(m.venue&&!names.includes(m.venue))opts.push(`<option value="${m.venue}" selected>${m.venue}</option>`);return opts.join('');})()}</select>
+              <button class="btn btn-outline btn-sm" onclick="addMatchNameInline(${m.id})" style="padding:0 10px;">＋</button>
+            </div>
+          </div>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 0 6px;border:1px solid var(--card-border);border-radius:10px;background:var(--input-bg);margin-bottom:10px;">
