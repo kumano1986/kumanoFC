@@ -1209,10 +1209,24 @@ function setAttendance(sid, parent, val) {
   if (isPersonalLocked(sid, parent)) { showToast('✅ 入力済みです（行のロックを解除してください）'); return; }
   var d = getAttendanceData();
   if (!d[sid]) d[sid] = {};
-  d[sid][parent] = (d[sid][parent] === val) ? '' : val;
+  var newVal = (d[sid][parent] === val) ? '' : val;
+  d[sid][parent] = newVal;
   // 編集時刻を記録
   _lastEditTime[sid + '_' + parent] = Date.now();
-  saveAttendanceData(d);
+  // ローカル保存
+  localStorage.setItem('fc_attendance2', JSON.stringify(d));
+  // クラウドには「変更したマスだけ」を送信（他家族を消さないため）
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    var patch = {};
+    patch[sid] = {};
+    patch[sid][parent] = newVal;
+    gasReq({action:'saveAttendance', data:JSON.stringify(patch)}).catch(function(){});
+    // ログ追記（保険・送りっぱなし）
+    var sObj = getSchedules().find(function(x){return x.id===sid;});
+    gasReq({action:'appendLog', data:JSON.stringify({
+      family: parent, sid: sid, date: sObj?sObj.date:'', kind: '出欠', attendance: newVal
+    })}).catch(function(){});
+  }
   renderAttendancePage();
 }
 
@@ -1252,6 +1266,7 @@ function setCarpoolDrive(sid, parent, val) {
   _carpoolEditTime = Date.now();
   localStorage.setItem('fc_carpool', JSON.stringify(d));
   pushMasterNow();
+  logCarpool(sid, parent, d[sid][parent]);
   renderAttendancePage();
 }
 function setCarpoolNum(sid, parent, field, val) {
@@ -1263,7 +1278,19 @@ function setCarpoolNum(sid, parent, field, val) {
   _carpoolEditTime = Date.now();
   localStorage.setItem('fc_carpool', JSON.stringify(d));
   pushMasterNow(); // デバウンスせず即座に送信
+  logCarpool(sid, parent, d[sid][parent]);
   renderAttendancePage();
+}
+
+// 配車ログ追記（保険・送りっぱなし）
+function logCarpool(sid, parent, cpEntry) {
+  if (typeof gasUrl === 'undefined' || !gasUrl) return;
+  var sObj = getSchedules().find(function(x){return x.id===sid;});
+  gasReq({action:'appendLog', data:JSON.stringify({
+    family: parent, sid: sid, date: sObj?sObj.date:'', kind: '配車',
+    drive: cpEntry.drive||'', capacity: cpEntry.capacity||'',
+    players: cpEntry.players||'', companions: cpEntry.companions||''
+  })}).catch(function(){});
 }
 
 // 即座にマスタを送信（配車など消えやすいデータ用）
@@ -1292,14 +1319,14 @@ function deleteSchedule(sid) {
   if (!confirm('この日程を削除しますか？')) return;
   var scheds = getSchedules().filter(function(s){return s.id!==sid;});
   saveSchedules(scheds);
-  // ローカルの出欠・配車データからも削除
+  // ローカルの出欠・配車データからも削除（ローカルのみ更新）
   var attData = getAttendanceData();
   delete attData[sid];
-  saveAttendanceData(attData);
+  localStorage.setItem('fc_attendance2', JSON.stringify(attData));
   var cpData = getCarpoolData();
   delete cpData[sid];
   saveCarpoolData(cpData);
-  // クラウドからも削除
+  // クラウドからはその日程の行だけ削除
   if (typeof gasUrl !== 'undefined' && gasUrl) {
     gasReq({action: 'deleteAttendanceRow', sid: sid}).catch(function(){});
   }
@@ -1471,7 +1498,6 @@ function deleteAllSchedules() {
     pushMasterToCloud();
     // 出欠シートも空に
     gasReq({action: 'clearAttendance'})
-      .then(function(){ return gasReq({action: 'saveAttendance', data: '{}'}); })
       .catch(function(){})
       .finally(function(){ startAutoSync(); });
   } else {
@@ -1595,7 +1621,11 @@ function addSchedule() {
   validIds.forEach(function(sid){ cleanAtt[sid] = attData[sid] || {}; });
   cleanAtt[id] = {};
   localStorage.setItem('fc_attendance2', JSON.stringify(cleanAtt));
-  gasReq({action:'saveAttendance', data:JSON.stringify(cleanAtt)}).catch(function(){});
+  // 新日程の空行だけをGASに作成（他家族データは触らない）
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    var newRow = {}; newRow[id] = {};
+    gasReq({action:'saveAttendance', data:JSON.stringify(newRow)}).catch(function(){});
+  }
   var cpData = getCarpoolData();
   var cleanCp = {};
   validIds.forEach(function(sid){ cleanCp[sid] = cpData[sid] || {}; });

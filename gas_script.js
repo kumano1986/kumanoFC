@@ -8,6 +8,7 @@ const SHEET_MATCHES = '試合';
 const SHEET_SUMMARY = '年度累積';
 const SHEET_ATTENDANCE = '出欠確認';
 const SHEET_MASTER = 'マスタ'; // 日程・家族・会場・試合名を1シートにJSON保存
+const SHEET_LOG = 'ログ'; // 出欠・配車の変更履歴（追記専用・読み出さない）
 
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
@@ -34,6 +35,7 @@ function handleRequest(e) {
     else if (p.action === 'saveAttendance')   result = saveAttendance(JSON.parse(p.data));
     else if (p.action === 'clearAttendance')  result = clearAttendance();
     else if (p.action === 'deleteAttendanceRow') result = deleteAttendanceRow(p.sid);
+    else if (p.action === 'appendLog')      result = appendLog(JSON.parse(p.data));
     // マスタデータ
     else if (p.action === 'getMaster')      result = getMaster();
     else if (p.action === 'saveMaster')     result = saveMaster(JSON.parse(p.data));
@@ -314,22 +316,52 @@ function saveAttendance(attData) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(SHEET_ATTENDANCE);
   if (!sheet) sheet = ss.insertSheet(SHEET_ATTENDANCE);
-  sheet.clearContents();
 
+  // 既存データを読み込んでマージ（他家族のデータ消失を防ぐ）
+  const existing = {};
+  const existingData = sheet.getDataRange().getValues();
+  if (existingData.length > 1) {
+    const exHeaders = existingData[0];
+    existingData.slice(1).forEach(row => {
+      if (!row[0]) return;
+      const id = row[0];
+      existing[id] = {};
+      exHeaders.slice(1).forEach((h, i) => {
+        if (h && row[i+1]) existing[id][h] = row[i+1];
+      });
+    });
+  }
+
+  // 受け取ったデータを既存にマージ（受信データを優先、ただし空文字は既存を保持しない＝削除扱い）
   const ids = Object.keys(attData);
-  if (!ids.length) return { success: true };
+  ids.forEach(id => {
+    if (!existing[id]) existing[id] = {};
+    const incoming = attData[id] || {};
+    Object.keys(incoming).forEach(p => {
+      const v = incoming[p];
+      if (v === '' || v === null || v === undefined) {
+        delete existing[id][p]; // 明示的に空にされた＝削除
+      } else {
+        existing[id][p] = v;
+      }
+    });
+  });
 
-  // 家族名を動的に収集
+  // 全日程ID・全家族を集約
+  const allIds = Object.keys(existing);
   const parentsSet = new Set();
-  ids.forEach(id => Object.keys(attData[id] || {}).forEach(p => parentsSet.add(p)));
+  allIds.forEach(id => Object.keys(existing[id] || {}).forEach(p => parentsSet.add(p)));
   const parents = Array.from(parentsSet);
+
+  sheet.clearContents();
+  if (!allIds.length || !parents.length) return { success: true };
 
   const headers = ['日程ID', ...parents];
   sheet.getRange(1,1,1,headers.length).setValues([headers]);
   sheet.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
 
-  const rows = ids.map(id => {
-    const att = attData[id] || {};
+  const rows = allIds.map(id => {
+    const att = existing[id] || {};
     return [id, ...parents.map(p => att[p] || '')];
   });
   sheet.getRange(2,1,rows.length,headers.length).setValues(rows);
@@ -339,6 +371,7 @@ function saveAttendance(attData) {
       const v = row[pi+1];
       const cell = sheet.getRange(ri+2, pi+2);
       if (v==='◯') cell.setBackground('#e8f5ee').setFontColor('#1a7a3f');
+      else if (v==='●') cell.setBackground('#e8eef5').setFontColor('#1a4a7a');
       else if (v==='×') cell.setBackground('#fdecea').setFontColor('#c0392b');
       else if (v==='△') cell.setBackground('#fef9e7').setFontColor('#b7950b');
     });
@@ -370,5 +403,33 @@ function deleteAttendanceRow(sid) {
       break;
     }
   }
+  return { success: true };
+}
+
+// ===== ログ追記（追記専用・アプリからは読み出さない保険） =====
+function appendLog(data) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(SHEET_LOG);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_LOG);
+    const headers = ['記録日時', '家族', '日程ID', '日付', '種別', '出欠', '配車区分', '乗車可能', '選手数', '同伴数'];
+    sheet.getRange(1,1,1,headers.length).setValues([headers]);
+    sheet.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#555').setFontColor('white');
+    sheet.setFrozenRows(1);
+  }
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+  const row = [
+    now,
+    data.family || '',
+    data.sid || '',
+    data.date || '',
+    data.kind || '',      // '出欠' or '配車'
+    data.attendance || '', // ◯●△×
+    data.drive || '',      // ok/ng/no
+    data.capacity || '',
+    data.players || '',
+    data.companions || ''
+  ];
+  sheet.appendRow(row);
   return { success: true };
 }
