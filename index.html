@@ -1286,9 +1286,11 @@ function setCarpoolNum(sid, parent, field, val) {
 function logCarpool(sid, parent, cpEntry) {
   if (typeof gasUrl === 'undefined' || !gasUrl) return;
   var sObj = getSchedules().find(function(x){return x.id===sid;});
+  var driveMap = { ok: '可能', ng: '希望', no: '不要' };
+  var driveJa = driveMap[cpEntry.drive] || cpEntry.drive || '';
   gasReq({action:'appendLog', data:JSON.stringify({
     family: parent, sid: sid, date: sObj?sObj.date:'', kind: '配車',
-    drive: cpEntry.drive||'', capacity: cpEntry.capacity||'',
+    drive: driveJa, capacity: cpEntry.capacity||'',
     players: cpEntry.players||'', companions: cpEntry.companions||''
   })}).catch(function(){});
 }
