@@ -2231,7 +2231,7 @@ async function pullMasterFromCloud() {
     if (Array.isArray(master.matchNames)) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
     if (Array.isArray(master.opponents))  { localStorage.setItem('fc_opponents',   JSON.stringify(master.opponents));  }
     if (master.carpool && typeof master.carpool === 'object' && !_masterPushing && (Date.now() - _carpoolEditTime > 30000)) { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
-    if (master.duty    && typeof master.duty    === 'object' && !_masterPushing && (Date.now() - _dutyEditTime > 30000)) { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
+    if (master.duty    && typeof master.duty    === 'object' && !_masterPushing && (Date.now() - _dutyEditTime > 60000)) { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
     if (master.attPlayers && typeof master.attPlayers === 'object' && !_masterPushing) { localStorage.setItem('fc_family_players', JSON.stringify(master.attPlayers)); }
   } catch(e) {}
 }
@@ -2293,7 +2293,7 @@ function startAutoSync() {
         var nwCp = JSON.stringify(master.carpool);
         if (curCp !== nwCp) { localStorage.setItem('fc_carpool', nwCp); masterChanged = true; }
       }
-      if (master.duty && typeof master.duty==='object' && !_masterPushing && (Date.now() - _dutyEditTime > 30000)) {
+      if (master.duty && typeof master.duty==='object' && !_masterPushing && (Date.now() - _dutyEditTime > 60000)) {
         var curDy = localStorage.getItem('fc_duty') || '{}';
         var nwDy = JSON.stringify(master.duty);
         if (curDy !== nwDy) { localStorage.setItem('fc_duty', nwDy); masterChanged = true; }
@@ -2303,7 +2303,7 @@ function startAutoSync() {
         var nwAp = JSON.stringify(master.attPlayers);
         if (curAp !== nwAp) { localStorage.setItem('fc_family_players', nwAp); masterChanged = true; }
       }
-      if (master.dutyTotal && typeof master.dutyTotal==='object' && (Date.now() - _dutyEditTime > 30000)) {
+      if (master.dutyTotal && typeof master.dutyTotal==='object' && (Date.now() - _dutyEditTime > 60000)) {
         var curDt = localStorage.getItem('fc_duty_total') || '{}';
         var nwDt = JSON.stringify(master.dutyTotal);
         if (curDt !== nwDt) { localStorage.setItem('fc_duty_total', nwDt); masterChanged = true; }
@@ -3283,9 +3283,12 @@ function assignDuty(sid, name) {
   var totals = getDutyTotals();
   if (prev && prev !== name && totals[prev] > 0) totals[prev]--;
   if (prev !== name) totals[name] = (totals[name] || 0) + 1;
-  saveDutyTotals(totals);
   d[sid] = name;
-  saveDutyData(d);
+  // 両方をローカル保存してから1回だけ送信（レース防止）
+  localStorage.setItem('fc_duty_total', JSON.stringify(totals));
+  localStorage.setItem('fc_duty', JSON.stringify(d));
+  _dutyEditTime = Date.now();
+  pushMasterNow();
   renderDutyPage();
   renderAttendancePage();
 }
@@ -3293,12 +3296,14 @@ function assignDuty(sid, name) {
 function clearDuty(sid) {
   var d = getDutyData();
   var prev = d[sid];
-  if (prev) {
-    var totals = getDutyTotals();
-    if (totals[prev] > 0) { totals[prev]--; saveDutyTotals(totals); }
-  }
+  var totals = getDutyTotals();
+  if (prev && totals[prev] > 0) totals[prev]--;
   delete d[sid];
-  saveDutyData(d);
+  // 両方をローカル保存してから1回だけ送信
+  localStorage.setItem('fc_duty_total', JSON.stringify(totals));
+  localStorage.setItem('fc_duty', JSON.stringify(d));
+  _dutyEditTime = Date.now();
+  pushMasterNow();
   renderDutyPage();
   renderAttendancePage();
 }
