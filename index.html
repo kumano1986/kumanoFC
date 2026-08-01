@@ -435,6 +435,12 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認タブのすべての日程カードを削除します。出欠データも合わせてリセットされます。</div>
         <button type="button" class="btn btn-full" onclick="deleteAllSchedules()" style="background:#888;color:white;font-weight:700;border:none;cursor:pointer;">🗑 全日程を削除する</button>
       </div>
+      <!-- 累計当番回数のリセット -->
+      <div class="card">
+        <div class="card-title">🔔 累計当番回数のリセット</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">不具合で累計がずれた場合に、現在の当番割り当てから正しい回数に計算し直します。割り当て済みの当番や出欠データには影響しません。</div>
+        <button type="button" class="btn btn-full" onclick="resetDutyTotals()" style="background:#e6a817;color:white;font-weight:700;border:none;cursor:pointer;">🔔 累計を正しく計算し直す</button>
+      </div>
       <!-- アプリのリセット -->
       <div class="card">
         <div class="card-title">🔄 アプリのリセット</div>
@@ -3316,6 +3322,22 @@ function saveDutyTotals(t) {
   localStorage.setItem('fc_duty_total', JSON.stringify(t));
   _dutyEditTime = Date.now();
   pushMasterNow();
+}
+
+function resetDutyTotals() {
+  if (!confirm('累計当番回数を、現在の当番割り当てから正しく計算し直しますか？\n（不具合で増えた分がクリアされ、実際の割り当て回数に揃います）')) return;
+  // 現在の当番割り当て(fc_duty)から累計を再計算
+  var duty = getDutyData();
+  var totals = {};
+  Object.keys(duty).forEach(function(sid){
+    var name = duty[sid];
+    if (name) totals[name] = (totals[name] || 0) + 1;
+  });
+  localStorage.setItem('fc_duty_total', JSON.stringify(totals));
+  _dutyEditTime = Date.now();
+  pushMasterNow();
+  renderDutyPage();
+  showToast('累計を再計算しました');
 }
 
 function toggleGradeDuty(sid) {
