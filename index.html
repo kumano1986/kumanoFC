@@ -1846,9 +1846,11 @@ async function gasReq(params) {
 async function syncAll() {
   if (!gasUrl) return;
   var _ss = document.getElementById('sync-status'); if (_ss) _ss.textContent = '同期中...';
-  pullMasterFromCloud().then(function() {
+  // クラウドの最新データを取得し終えるまで待つ（これを待たずに操作されると古いデータで上書きしてしまうため）
+  try {
+    await pullMasterFromCloud();
     renderAttendancePage();
-  }).catch(function(){});
+  } catch(e) {}
   try {
     const p = await gasReq({action:'getPlayers'});
     const gasPlayers = Array.isArray(p) ? p : [];
