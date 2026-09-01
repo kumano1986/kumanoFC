@@ -1502,14 +1502,12 @@ function deleteAllSchedules() {
   localStorage.removeItem('fc_confirmed');
   localStorage.removeItem('fc_personal_lock');
   localStorage.removeItem('fc_duty');
-  // クラウドも削除
+  // クラウドも削除（両方の削除が完了するのを待ってから自動同期を再開）
   if (typeof gasUrl !== 'undefined' && gasUrl) {
-    // マスタの日程を明示的に全削除
-    gasReq({action: 'clearAllSchedulesFromMaster'}).catch(function(){});
-    // 出欠シートも空に
-    gasReq({action: 'clearAttendance'})
-      .catch(function(){})
-      .finally(function(){ startAutoSync(); });
+    Promise.all([
+      gasReq({action: 'clearAllSchedulesFromMaster'}).catch(function(){}),
+      gasReq({action: 'clearAttendance'}).catch(function(){})
+    ]).finally(function(){ startAutoSync(); });
   } else {
     startAutoSync();
   }
