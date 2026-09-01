@@ -369,6 +369,8 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       <button onclick="closeModal('modal-settings')" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:18px;border-radius:8px;padding:4px 10px;cursor:pointer;">✕</button>
     </div>
     <div style="padding:12px;">
+      <!-- データ容量の警告表示（危険域に近づいたときのみ表示） -->
+      <div id="master-size-warning" style="display:none;background:#fdecea;border:1.5px solid #e57373;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:#c0392b;line-height:1.6;"></div>
       <!-- 選手登録 -->
       <div class="card">
         <div class="card-title" id="ct-players">⚽ 選手を登録</div>
@@ -788,7 +790,11 @@ function addFamily() {
 function removeFamily(name) {
   if (!confirm(name + ' を削除しますか？')) return;
   var arr = getParents().filter(function(p){return p!==name;});
-  saveParents(arr);
+  _parentsCache = arr;
+  localStorage.setItem('fc_parents', JSON.stringify(arr));
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action: 'removeFamilyFromMaster', name: name}).catch(function(){});
+  }
   renderFamilies();
   showToast(name + ' を削除しました');
 }
@@ -972,7 +978,10 @@ function addMatchName() {
 
 function removeMatchName(name) {
   var arr = getMatchNames().filter(function(n){return n!==name;});
-  saveMatchNames(arr);
+  localStorage.setItem('fc_match_names', JSON.stringify(arr));
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action: 'removeMatchNameFromMaster', name: name}).catch(function(){});
+  }
   renderMatchNames();
 }
 
@@ -1003,7 +1012,10 @@ function addOpponentMaster() {
 
 function removeOpponent(name) {
   var arr = getOpponents().filter(function(n){return n!==name;});
-  saveOpponents(arr);
+  localStorage.setItem('fc_opponents', JSON.stringify(arr));
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action: 'removeOpponentFromMaster', name: name}).catch(function(){});
+  }
   renderOpponents();
 }
 
@@ -1017,7 +1029,11 @@ function editOpponent(name) {
   if (idx < 0) return;
   if (arr.indexOf(newName) >= 0 && newName !== name) { showToast('同じ名前が既にあります'); return; }
   arr[idx] = newName;
-  saveOpponents(arr);
+  localStorage.setItem('fc_opponents', JSON.stringify(arr));
+  // クラウド側も専用アクションで確実に旧名称を置き換え（マージだと旧名称が残ってしまうため）
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action: 'renameOpponentInMaster', oldName: name, newName: newName}).catch(function(){});
+  }
   // 既存の試合データの相手名も更新
   matches.forEach(function(m){ if (m.opponent === name) m.opponent = newName; });
   saveMatches();
@@ -1129,7 +1145,10 @@ function addVenueMaster() {
 
 function removeVenue(name) {
   var arr = getVenues().filter(function(v){ return v !== name; });
-  saveVenues(arr);
+  localStorage.setItem('fc_venues', JSON.stringify(arr));
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action: 'removeVenueFromMaster', name: name}).catch(function(){});
+  }
   renderVenues();
 }
 
@@ -1149,7 +1168,16 @@ function renderVenues() {
 function getSchedules() {
   return JSON.parse(localStorage.getItem('fc_schedules') || '[]');
 }
-function saveSchedules(s) { localStorage.setItem('fc_schedules', JSON.stringify(s)); pushMasterToCloud(); }
+function saveSchedules(s) {
+  localStorage.setItem('fc_schedules', JSON.stringify(s));
+  pushMasterToCloud();
+  // 追跡用ログ：この端末が何件の日程でマスタを送信したかを記録（保険・送りっぱなし）
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action:'appendLog', data:JSON.stringify({
+      family: getMyFamily() || '(未設定)', kind: '日程一覧送信', attendance: s.length + '件'
+    })}).catch(function(){});
+  }
+}
 
 // 出欠データ（デフォルト未選択）
 function getAttendanceData() {
@@ -1325,9 +1353,11 @@ function pushMasterNow() {
 
 function deleteSchedule(sid) {
   if (!confirm('この日程を削除しますか？')) return;
-  var scheds = getSchedules().filter(function(s){return s.id!==sid;});
+  var scheds = getSchedules();
+  var target = scheds.find(function(s){return s.id===sid;});
+  var remaining = scheds.filter(function(s){return s.id!==sid;});
   // ローカルのみ更新（クラウドはマージ方式のため、削除は専用アクションで行う）
-  localStorage.setItem('fc_schedules', JSON.stringify(scheds));
+  localStorage.setItem('fc_schedules', JSON.stringify(remaining));
   // ローカルの出欠・配車データからも削除（ローカルのみ更新）
   var attData = getAttendanceData();
   delete attData[sid];
@@ -1339,6 +1369,10 @@ function deleteSchedule(sid) {
   if (typeof gasUrl !== 'undefined' && gasUrl) {
     gasReq({action: 'deleteScheduleFromMaster', sid: sid}).catch(function(){});
     gasReq({action: 'deleteAttendanceRow', sid: sid}).catch(function(){});
+    // ログ追記（保険・送りっぱなし）
+    gasReq({action:'appendLog', data:JSON.stringify({
+      family: getMyFamily() || '(未設定)', sid: sid, date: target?target.date:'', kind: '日程削除', attendance: target?target.venue:''
+    })}).catch(function(){});
   }
   renderAttendancePage();
 }
@@ -1643,6 +1677,12 @@ function addSchedule() {
   closeModal('modal-add-schedule');
   renderAttendancePage();
   showToast('日程を追加しました');
+  // ログ追記（保険・送りっぱなし）
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action:'appendLog', data:JSON.stringify({
+      family: getMyFamily() || '(未設定)', sid: id, date: date, kind: '日程追加', attendance: venue
+    })}).catch(function(){});
+  }
 }
 
 function showArchiveModal() {
@@ -1667,9 +1707,19 @@ function doArchive() {
   var checks = document.querySelectorAll('.archive-check:checked');
   if (!checks.length) { showToast('日程を選択してください'); return; }
   var ids = Array.from(checks).map(function(c){return c.value;});
-  var scheds = getSchedules();
-  scheds.forEach(function(s){ if(ids.includes(s.id)) s.archived = true; });
-  saveSchedules(scheds);
+  // マスタのサイズ削減のため、アーカイブする日程は完全に切り離す
+  // （アーカイブ専用シートに退避され、クラウドの容量を圧迫しなくなる）
+  var scheds = getSchedules().filter(function(s){ return ids.indexOf(s.id) < 0; });
+  localStorage.setItem('fc_schedules', JSON.stringify(scheds));
+  var attData = getAttendanceData();
+  ids.forEach(function(id){ delete attData[id]; });
+  localStorage.setItem('fc_attendance2', JSON.stringify(attData));
+  var cpData = getCarpoolData();
+  ids.forEach(function(id){ delete cpData[id]; });
+  localStorage.setItem('fc_carpool', JSON.stringify(cpData));
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action: 'archiveSchedules', ids: JSON.stringify(ids)}).catch(function(){});
+  }
   closeModal('modal-archive');
   renderAttendancePage();
   showToast(ids.length + '件をアーカイブしました');
@@ -1847,24 +1897,14 @@ async function syncAll() {
   if (!gasUrl) return;
   var _ss = document.getElementById('sync-status'); if (_ss) _ss.textContent = '同期中...';
   // クラウドの最新データを取得し終えるまで待つ（これを待たずに操作されると古いデータで上書きしてしまうため）
+  // 選手データもマスタ経由に一本化（選手専用シートとの二重管理をやめ、不整合を防ぐ）
   try {
     await pullMasterFromCloud();
-    renderAttendancePage();
-  } catch(e) {}
-  try {
-    const p = await gasReq({action:'getPlayers'});
-    const gasPlayers = Array.isArray(p) ? p : [];
-    if (gasPlayers.length > 0) {
-      players = gasPlayers;
-    } else {
-      players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
-    }
-    localStorage.setItem('fc_players_permanent', JSON.stringify(players));
-    localStorage.setItem('fc_players', JSON.stringify(players));
-    // 試合データは常にローカル優先（アプリリセット時のみクリア）
+    players = JSON.parse(localStorage.getItem('fc_players_permanent') || localStorage.getItem('fc_players') || '[]');
     matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
     matchCounter = matches.length > 0 ? Math.max(...matches.map(m=>m.num)) : 0;
     setConnected(true);
+    renderAttendancePage();
     renderPlayers();
     renderAllMatches();
   } catch(e) {
@@ -1920,7 +1960,11 @@ async function addPlayer() {
 
 async function removePlayer(id) {
   players = players.filter(p=>p.id!==id);
-  await savePlayers();
+  localStorage.setItem('fc_players_permanent', JSON.stringify(players));
+  localStorage.setItem('fc_players', JSON.stringify(players));
+  if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action: 'removePlayerFromMaster', id: id}).catch(function(){});
+  }
   renderPlayers();
   renderAllMatches();
 }
@@ -1966,9 +2010,8 @@ function addMatchNameInline(matchId) {
 async function savePlayers() {
   localStorage.setItem('fc_players_permanent', JSON.stringify(players));
   localStorage.setItem('fc_players', JSON.stringify(players));
+  // 選手データはマスタに一本化（選手専用シートへの重複保存はしない。二重管理による不整合を防ぐ）
   pushMasterToCloud();
-  if (!gasUrl) return;
-  try { await gasReq({action:'savePlayers', data:JSON.stringify(players)}); } catch(e){}
 }
 
 async function saveMatches() {
@@ -2171,6 +2214,7 @@ function openSettings() {
   if (card) {
     card.style.border = getMyFamily() ? '2px solid var(--green)' : '2px solid #e6a817';
   }
+  checkMasterSize();
   if (gasUrl) {
     pullMasterFromCloud().then(function() {
       renderPlayers();
@@ -2187,6 +2231,24 @@ function openSettings() {
     renderOpponents();
     renderVenues();
   }
+}
+
+// マスタデータの容量を確認し、危険域に近づいたら警告を表示
+function checkMasterSize() {
+  var el = document.getElementById('master-size-warning');
+  if (!el) return;
+  if (typeof gasUrl === 'undefined' || !gasUrl) { el.style.display = 'none'; return; }
+  gasReq({action: 'getMasterSize'}).then(function(res) {
+    if (!res || typeof res.size !== 'number') { el.style.display = 'none'; return; }
+    var limit = 50000;
+    var pct = Math.round(res.size / limit * 100);
+    if (pct >= 50) {
+      el.style.display = 'block';
+      el.innerHTML = '⚠️ <b>データ容量が上限の' + pct + '%</b>（' + res.size.toLocaleString() + ' / ' + limit.toLocaleString() + '文字）に達しています。<br>古い日程は「⚙️設定 → 📦アーカイブ」でクラウドから完全に切り離すと容量が減ります。';
+    } else {
+      el.style.display = 'none';
+    }
+  }).catch(function(){ el.style.display = 'none'; });
 }
 
 function closeModal(id) {
@@ -2228,19 +2290,20 @@ async function pullMasterFromCloud() {
   try {
     var master = await gasReq({action: 'getMaster'});
     if (!master || master.error) return;
-    if (Array.isArray(master.players)) {
+    if (Array.isArray(master.players) && !_masterPushing) {
       localStorage.setItem('fc_players_permanent', JSON.stringify(master.players));
       localStorage.setItem('fc_players', JSON.stringify(master.players));
       players = master.players;
     }
     if (master.schedules && Array.isArray(master.schedules) && !_masterPushing)  { localStorage.setItem('fc_schedules',   JSON.stringify(master.schedules));  }
-    if (Array.isArray(master.parents))    { localStorage.setItem('fc_parents',     JSON.stringify(master.parents));    _parentsCache = null; }
-    if (Array.isArray(master.venues))     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
-    if (Array.isArray(master.matchNames)) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
-    if (Array.isArray(master.opponents))  { localStorage.setItem('fc_opponents',   JSON.stringify(master.opponents));  }
+    if (Array.isArray(master.parents) && !_masterPushing)    { localStorage.setItem('fc_parents',     JSON.stringify(master.parents));    _parentsCache = null; }
+    if (Array.isArray(master.venues) && !_masterPushing)     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
+    if (Array.isArray(master.matchNames) && !_masterPushing) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
+    if (Array.isArray(master.opponents) && !_masterPushing)  { localStorage.setItem('fc_opponents',   JSON.stringify(master.opponents));  }
     if (master.carpool && typeof master.carpool === 'object' && !_masterPushing && (Date.now() - _carpoolEditTime > 30000)) { localStorage.setItem('fc_carpool', JSON.stringify(master.carpool)); }
     if (master.duty    && typeof master.duty    === 'object' && !_masterPushing && (Date.now() - _dutyEditTime > 60000)) { localStorage.setItem('fc_duty',    JSON.stringify(master.duty));    }
     if (master.attPlayers && typeof master.attPlayers === 'object' && !_masterPushing) { localStorage.setItem('fc_family_players', JSON.stringify(master.attPlayers)); }
+    if (master.dutyTotal  && typeof master.dutyTotal  === 'object' && !_masterPushing && (Date.now() - _dutyEditTime > 60000)) { localStorage.setItem('fc_duty_total', JSON.stringify(master.dutyTotal)); }
   } catch(e) {}
 }
 
@@ -2293,9 +2356,9 @@ function startAutoSync() {
         var nw = JSON.stringify(master.parents);
         if (cur !== nw) { localStorage.setItem('fc_parents', nw); _parentsCache = null; masterChanged = true; }
       }
-      if (Array.isArray(master.venues))     localStorage.setItem('fc_venues',      JSON.stringify(master.venues));
-      if (Array.isArray(master.matchNames)) localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames));
-      if (Array.isArray(master.opponents)) localStorage.setItem('fc_opponents', JSON.stringify(master.opponents));
+      if (Array.isArray(master.venues) && !_masterPushing)     localStorage.setItem('fc_venues',      JSON.stringify(master.venues));
+      if (Array.isArray(master.matchNames) && !_masterPushing) localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames));
+      if (Array.isArray(master.opponents) && !_masterPushing)  localStorage.setItem('fc_opponents',   JSON.stringify(master.opponents));
       if (master.carpool && typeof master.carpool==='object' && !_masterPushing && (Date.now() - _carpoolEditTime > 30000)) {
         var curCp = localStorage.getItem('fc_carpool') || '{}';
         var nwCp = JSON.stringify(master.carpool);
@@ -2694,6 +2757,12 @@ let reportMeta = JSON.parse(localStorage.getItem('fc_report_meta') || '{"date":"
 let summaryData = [];
 let selectedNendo = null;
 let deferredPrompt = null;
+
+function saveReportMeta() {
+  var dateEl = document.getElementById('report-date');
+  if (dateEl) reportMeta.date = dateEl.value;
+  localStorage.setItem('fc_report_meta', JSON.stringify(reportMeta));
+}
 
 // ===== 年度計算 =====
 function getNendo(date) {

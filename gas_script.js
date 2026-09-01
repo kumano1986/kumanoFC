@@ -9,6 +9,7 @@ const SHEET_SUMMARY = '年度累積';
 const SHEET_ATTENDANCE = '出欠確認';
 const SHEET_MASTER = 'マスタ'; // 日程・家族・会場・試合名を1シートにJSON保存
 const SHEET_LOG = 'ログ'; // 出欠・配車の変更履歴（追記専用・読み出さない）
+const SHEET_ARCHIVE = 'アーカイブ済み日程'; // アーカイブした日程を退避（マスタのサイズ削減用）
 
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
@@ -41,6 +42,14 @@ function handleRequest(e) {
     else if (p.action === 'saveMaster')     result = saveMaster(JSON.parse(p.data));
     else if (p.action === 'deleteScheduleFromMaster')   result = deleteScheduleFromMaster(p.sid);
     else if (p.action === 'clearAllSchedulesFromMaster') result = clearAllSchedulesFromMaster();
+    else if (p.action === 'archiveSchedules')  result = archiveSchedules(JSON.parse(p.ids));
+    else if (p.action === 'getMasterSize')     result = getMasterSize();
+    else if (p.action === 'removeFamilyFromMaster')    result = removeFamilyFromMaster(p.name);
+    else if (p.action === 'removePlayerFromMaster')    result = removePlayerFromMaster(p.id);
+    else if (p.action === 'removeVenueFromMaster')     result = removeVenueFromMaster(p.name);
+    else if (p.action === 'removeMatchNameFromMaster') result = removeMatchNameFromMaster(p.name);
+    else if (p.action === 'removeOpponentFromMaster')  result = removeOpponentFromMaster(p.name);
+    else if (p.action === 'renameOpponentInMaster')    result = renameOpponentInMaster(p.oldName, p.newName);
     else result = { error: 'Unknown action' };
   } catch(err) { result = { error: err.toString() }; }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
@@ -63,15 +72,50 @@ function saveMaster(obj) {
   try {
     const sheet = getSheet(SHEET_MASTER);
     const existing = getMaster();
+    if (!existing._deleted) existing._deleted = {};
 
-    // schedulesはマージ方式（idベース）：他端末がまだ知らない日程を消さない
+    // schedulesはID基準でマージ：他端末がまだ知らない日程を消さない。
+    // ただし、削除マーカー（tombstone）がある項目は、他端末の古いデータで復活させない。
     if (Array.isArray(obj.schedules)) {
+      const delMap = getTombstoneMap(existing, 'schedules');
       const existingSchedules = Array.isArray(existing.schedules) ? existing.schedules : [];
       const merged = {};
-      existingSchedules.forEach(function(s){ if (s && s.id) merged[s.id] = s; });
-      obj.schedules.forEach(function(s){ if (s && s.id) merged[s.id] = s; });
+      existingSchedules.forEach(function(s){ if (s && s.id && !delMap[s.id]) merged[s.id] = s; });
+      obj.schedules.forEach(function(s){ if (s && s.id && !delMap[s.id]) merged[s.id] = s; });
       obj.schedules = Object.values(merged);
     }
+
+    // players：ID基準でマージ。受信データの順序（並び替え・編集を尊重）を基本にしつつ、
+    // 受信データにないID（他端末がまだ知らない新規選手）は末尾に保持する。重複IDは除去する。
+    // 削除マーカーがあるIDは復活させない。
+    if (Array.isArray(obj.players)) {
+      const delMap = getTombstoneMap(existing, 'players');
+      const existingPlayers = Array.isArray(existing.players) ? existing.players : [];
+      const seenIds = {};
+      const mergedPlayers = [];
+      obj.players.forEach(function(p){
+        if (p && p.id != null && !seenIds[p.id] && !delMap[p.id]) { seenIds[p.id] = true; mergedPlayers.push(p); }
+      });
+      existingPlayers.forEach(function(p){
+        if (p && p.id != null && !seenIds[p.id] && !delMap[p.id]) { seenIds[p.id] = true; mergedPlayers.push(p); }
+      });
+      obj.players = mergedPlayers;
+    }
+
+    // parents・venues・matchNames・opponents：文字列配列。受信データの順序を基本にしつつ、
+    // 受信データにない既存の文字列（他端末がまだ知らない新規項目）は末尾に保持する。重複は除去する。
+    // 削除マーカーがある文字列は復活させない。
+    ['parents', 'venues', 'matchNames', 'opponents'].forEach(function(key) {
+      if (Array.isArray(obj[key])) {
+        const delMap = getTombstoneMap(existing, key);
+        const existingArr = Array.isArray(existing[key]) ? existing[key] : [];
+        const seen = {};
+        const result = [];
+        obj[key].forEach(function(v){ if (!seen[v] && !delMap[v]) { seen[v] = true; result.push(v); } });
+        existingArr.forEach(function(v){ if (!seen[v] && !delMap[v]) { seen[v] = true; result.push(v); } });
+        obj[key] = result;
+      }
+    });
 
     // carpool・duty：日程IDをキーとするネストオブジェクトなのでキー単位でマージ
     ['carpool', 'duty'].forEach(function(key) {
@@ -118,6 +162,7 @@ function deleteScheduleFromMaster(sid) {
     if (Array.isArray(existing.schedules)) {
       existing.schedules = existing.schedules.filter(function(s){ return s.id !== sid; });
     }
+    markTombstone(existing, 'schedules', sid);
     const sheet = getSheet(SHEET_MASTER);
     sheet.clearContents();
     sheet.getRange(1,1).setValue('マスタデータ（JSON）');
@@ -129,13 +174,124 @@ function deleteScheduleFromMaster(sid) {
   }
 }
 
-// 全日程を明示的に削除
+// 全日程を明示的に削除（配車・当番データも一緒にクリア）
 function clearAllSchedulesFromMaster() {
   var lock = LockService.getScriptLock();
   lock.tryLock(15000);
   try {
     const existing = getMaster();
+    if (Array.isArray(existing.schedules)) {
+      existing.schedules.forEach(function(s){ markTombstone(existing, 'schedules', s.id); });
+    }
     existing.schedules = [];
+    existing.carpool = {};
+    existing.duty = {};
+    const sheet = getSheet(SHEET_MASTER);
+    sheet.clearContents();
+    sheet.getRange(1,1).setValue('マスタデータ（JSON）');
+    sheet.getRange(1,1).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
+    sheet.getRange(2,1).setValue(JSON.stringify(existing));
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 日程をアーカイブ専用シートに退避し、マスタから完全に削除（マスタのサイズ肥大化を防ぐ）
+function archiveSchedules(ids) {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(15000);
+  try {
+    const existing = getMaster();
+    if (!Array.isArray(existing.schedules)) return { success: true };
+
+    const toArchive = existing.schedules.filter(function(s){ return ids.indexOf(s.id) >= 0; });
+
+    if (toArchive.length > 0) {
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      let archiveSheet = ss.getSheetByName(SHEET_ARCHIVE);
+      if (!archiveSheet) {
+        archiveSheet = ss.insertSheet(SHEET_ARCHIVE);
+        const headers = ['日程ID', '日付', '詳細JSON（日程・配車・当番）'];
+        archiveSheet.getRange(1,1,1,headers.length).setValues([headers]);
+        archiveSheet.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#888').setFontColor('white');
+        archiveSheet.setFrozenRows(1);
+      }
+      toArchive.forEach(function(s) {
+        const extra = {
+          schedule: s,
+          carpool: (existing.carpool && existing.carpool[s.id]) || null,
+          duty: (existing.duty && existing.duty[s.id]) || null
+        };
+        archiveSheet.appendRow([s.id, s.date, JSON.stringify(extra)]);
+      });
+    }
+
+    // マスタから完全に削除（サイズ削減）
+    existing.schedules = existing.schedules.filter(function(s){ return ids.indexOf(s.id) < 0; });
+    ids.forEach(function(id){ markTombstone(existing, 'schedules', id); });
+    if (existing.carpool) { ids.forEach(function(id){ delete existing.carpool[id]; }); }
+    if (existing.duty)    { ids.forEach(function(id){ delete existing.duty[id]; }); }
+
+    const sheet = getSheet(SHEET_MASTER);
+    sheet.clearContents();
+    sheet.getRange(1,1).setValue('マスタデータ（JSON）');
+    sheet.getRange(1,1).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
+    sheet.getRange(2,1).setValue(JSON.stringify(existing));
+    return { success: true, archivedCount: toArchive.length };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// マスタデータの現在サイズを返す（上限50,000文字への近さを確認するため）
+function getMasterSize() {
+  const sheet = getSheet(SHEET_MASTER);
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2 || !data[1][0]) return { size: 0 };
+  return { size: String(data[1][0]).length };
+}
+
+// ===== マスタ配列データの個別削除（saveMasterのマージでは削除できないため専用アクションで行う） =====
+function removeFromMaster(key, matchFn, tombstoneKeyFn) {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(15000);
+  try {
+    const existing = getMaster();
+    if (Array.isArray(existing[key])) {
+      existing[key].forEach(function(item){
+        if (matchFn(item)) markTombstone(existing, key, tombstoneKeyFn(item));
+      });
+      existing[key] = existing[key].filter(function(item){ return !matchFn(item); });
+    }
+    const sheet = getSheet(SHEET_MASTER);
+    sheet.clearContents();
+    sheet.getRange(1,1).setValue('マスタデータ（JSON）');
+    sheet.getRange(1,1).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
+    sheet.getRange(2,1).setValue(JSON.stringify(existing));
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+function removeFamilyFromMaster(name)    { return removeFromMaster('parents',    function(v){ return v === name; }, function(v){ return v; }); }
+function removePlayerFromMaster(id)      { return removeFromMaster('players',    function(v){ return v && String(v.id) === String(id); }, function(v){ return v.id; }); }
+function removeVenueFromMaster(name)     { return removeFromMaster('venues',     function(v){ return v === name; }, function(v){ return v; }); }
+function removeMatchNameFromMaster(name) { return removeFromMaster('matchNames', function(v){ return v === name; }, function(v){ return v; }); }
+function removeOpponentFromMaster(name)  { return removeFromMaster('opponents',  function(v){ return v === name; }, function(v){ return v; }); }
+
+// 対戦相手の名称変更：旧名称をマスタから明示的に削除（saveMasterのマージ処理を安全に保つため）
+function renameOpponentInMaster(oldName, newName) {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(15000);
+  try {
+    const existing = getMaster();
+    if (Array.isArray(existing.opponents)) {
+      const idx = existing.opponents.indexOf(oldName);
+      if (idx >= 0) existing.opponents[idx] = newName;
+      else if (existing.opponents.indexOf(newName) < 0) existing.opponents.push(newName);
+    }
+    markTombstone(existing, 'opponents', oldName);
     const sheet = getSheet(SHEET_MASTER);
     sheet.clearContents();
     sheet.getRange(1,1).setValue('マスタデータ（JSON）');
@@ -150,6 +306,24 @@ function clearAllSchedulesFromMaster() {
 function getSheet(name) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   return ss.getSheetByName(name) || ss.insertSheet(name);
+}
+
+// ===== 削除マーカー（tombstone）: 削除した項目が他端末の古いデータで復活するのを防ぐ =====
+const TOMBSTONE_TTL_MS = 10 * 60 * 1000; // 10分間、削除を記憶しておく
+
+function getTombstoneMap(existing, category) {
+  if (!existing._deleted) existing._deleted = {};
+  if (!existing._deleted[category]) existing._deleted[category] = {};
+  const map = existing._deleted[category];
+  // 期限切れのマーカーは掃除する（無限に蓄積させない）
+  const now = Date.now();
+  Object.keys(map).forEach(function(k){ if (now - map[k] > TOMBSTONE_TTL_MS) delete map[k]; });
+  return map;
+}
+
+function markTombstone(existing, category, key) {
+  const map = getTombstoneMap(existing, category);
+  map[key] = Date.now();
 }
 
 // ===== 選手シート =====
