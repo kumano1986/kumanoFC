@@ -1326,16 +1326,18 @@ function pushMasterNow() {
 function deleteSchedule(sid) {
   if (!confirm('この日程を削除しますか？')) return;
   var scheds = getSchedules().filter(function(s){return s.id!==sid;});
-  saveSchedules(scheds);
+  // ローカルのみ更新（クラウドはマージ方式のため、削除は専用アクションで行う）
+  localStorage.setItem('fc_schedules', JSON.stringify(scheds));
   // ローカルの出欠・配車データからも削除（ローカルのみ更新）
   var attData = getAttendanceData();
   delete attData[sid];
   localStorage.setItem('fc_attendance2', JSON.stringify(attData));
   var cpData = getCarpoolData();
   delete cpData[sid];
-  saveCarpoolData(cpData);
-  // クラウドからはその日程の行だけ削除
+  localStorage.setItem('fc_carpool', JSON.stringify(cpData));
+  // クラウドからは明示的にこの日程だけ削除
   if (typeof gasUrl !== 'undefined' && gasUrl) {
+    gasReq({action: 'deleteScheduleFromMaster', sid: sid}).catch(function(){});
     gasReq({action: 'deleteAttendanceRow', sid: sid}).catch(function(){});
   }
   renderAttendancePage();
@@ -1502,8 +1504,8 @@ function deleteAllSchedules() {
   localStorage.removeItem('fc_duty');
   // クラウドも削除
   if (typeof gasUrl !== 'undefined' && gasUrl) {
-    // マスタの日程も空に
-    pushMasterToCloud();
+    // マスタの日程を明示的に全削除
+    gasReq({action: 'clearAllSchedulesFromMaster'}).catch(function(){});
     // 出欠シートも空に
     gasReq({action: 'clearAttendance'})
       .catch(function(){})

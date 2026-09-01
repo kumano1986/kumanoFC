@@ -39,6 +39,8 @@ function handleRequest(e) {
     // マスタデータ
     else if (p.action === 'getMaster')      result = getMaster();
     else if (p.action === 'saveMaster')     result = saveMaster(JSON.parse(p.data));
+    else if (p.action === 'deleteScheduleFromMaster')   result = deleteScheduleFromMaster(p.sid);
+    else if (p.action === 'clearAllSchedulesFromMaster') result = clearAllSchedulesFromMaster();
     else result = { error: 'Unknown action' };
   } catch(err) { result = { error: err.toString() }; }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
@@ -53,12 +55,96 @@ function getMaster() {
 }
 
 function saveMaster(obj) {
-  const sheet = getSheet(SHEET_MASTER);
-  sheet.clearContents();
-  sheet.getRange(1,1).setValue('マスタデータ（JSON）');
-  sheet.getRange(1,1).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
-  sheet.getRange(2,1).setValue(JSON.stringify(obj));
-  return { success: true };
+  var lock = LockService.getScriptLock();
+  var gotLock = lock.tryLock(15000); // 最大15秒待機（同時書き込みの競合を防ぐ）
+  if (!gotLock) {
+    return { error: 'サーバーが混み合っています。もう一度お試しください。' };
+  }
+  try {
+    const sheet = getSheet(SHEET_MASTER);
+    const existing = getMaster();
+
+    // schedulesはマージ方式（idベース）：他端末がまだ知らない日程を消さない
+    if (Array.isArray(obj.schedules)) {
+      const existingSchedules = Array.isArray(existing.schedules) ? existing.schedules : [];
+      const merged = {};
+      existingSchedules.forEach(function(s){ if (s && s.id) merged[s.id] = s; });
+      obj.schedules.forEach(function(s){ if (s && s.id) merged[s.id] = s; });
+      obj.schedules = Object.values(merged);
+    }
+
+    // carpool・duty：日程IDをキーとするネストオブジェクトなのでキー単位でマージ
+    ['carpool', 'duty'].forEach(function(key) {
+      if (obj[key] && typeof obj[key] === 'object') {
+        const existingVal = (existing[key] && typeof existing[key] === 'object') ? existing[key] : {};
+        const mergedVal = Object.assign({}, existingVal);
+        Object.keys(obj[key]).forEach(function(sid) {
+          if (key === 'carpool' && obj[key][sid] && typeof obj[key][sid] === 'object') {
+            mergedVal[sid] = Object.assign({}, mergedVal[sid] || {}, obj[key][sid]);
+          } else {
+            mergedVal[sid] = obj[key][sid];
+          }
+        });
+        obj[key] = mergedVal;
+      }
+    });
+
+    // attPlayers・dutyTotal：家族名をキーとするフラットオブジェクトなのでマージ
+    ['attPlayers', 'dutyTotal'].forEach(function(key) {
+      if (obj[key] && typeof obj[key] === 'object') {
+        const existingVal = (existing[key] && typeof existing[key] === 'object') ? existing[key] : {};
+        obj[key] = Object.assign({}, existingVal, obj[key]);
+      }
+    });
+
+    const mergedObj = Object.assign({}, existing, obj);
+
+    sheet.clearContents();
+    sheet.getRange(1,1).setValue('マスタデータ（JSON）');
+    sheet.getRange(1,1).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
+    sheet.getRange(2,1).setValue(JSON.stringify(mergedObj));
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 日程を1件だけ明示的に削除（saveMasterのマージでは削除できないため）
+function deleteScheduleFromMaster(sid) {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(15000);
+  try {
+    const existing = getMaster();
+    if (Array.isArray(existing.schedules)) {
+      existing.schedules = existing.schedules.filter(function(s){ return s.id !== sid; });
+    }
+    const sheet = getSheet(SHEET_MASTER);
+    sheet.clearContents();
+    sheet.getRange(1,1).setValue('マスタデータ（JSON）');
+    sheet.getRange(1,1).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
+    sheet.getRange(2,1).setValue(JSON.stringify(existing));
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 全日程を明示的に削除
+function clearAllSchedulesFromMaster() {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(15000);
+  try {
+    const existing = getMaster();
+    existing.schedules = [];
+    const sheet = getSheet(SHEET_MASTER);
+    sheet.clearContents();
+    sheet.getRange(1,1).setValue('マスタデータ（JSON）');
+    sheet.getRange(1,1).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
+    sheet.getRange(2,1).setValue(JSON.stringify(existing));
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function getSheet(name) {
@@ -313,71 +399,80 @@ function getAttendance() {
 }
 
 function saveAttendance(attData) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = ss.getSheetByName(SHEET_ATTENDANCE);
-  if (!sheet) sheet = ss.insertSheet(SHEET_ATTENDANCE);
+  const lock = LockService.getScriptLock();
+  const gotLock = lock.tryLock(15000);
+  if (!gotLock) {
+    return { error: 'サーバーが混み合っています。もう一度お試しください。' };
+  }
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sheet = ss.getSheetByName(SHEET_ATTENDANCE);
+    if (!sheet) sheet = ss.insertSheet(SHEET_ATTENDANCE);
 
-  // 既存データを読み込んでマージ（他家族のデータ消失を防ぐ）
-  const existing = {};
-  const existingData = sheet.getDataRange().getValues();
-  if (existingData.length > 1) {
-    const exHeaders = existingData[0];
-    existingData.slice(1).forEach(row => {
-      if (!row[0]) return;
-      const id = row[0];
-      existing[id] = {};
-      exHeaders.slice(1).forEach((h, i) => {
-        if (h && row[i+1]) existing[id][h] = row[i+1];
+    // 既存データを読み込んでマージ（他家族のデータ消失を防ぐ）
+    const existing = {};
+    const existingData = sheet.getDataRange().getValues();
+    if (existingData.length > 1) {
+      const exHeaders = existingData[0];
+      existingData.slice(1).forEach(row => {
+        if (!row[0]) return;
+        const id = row[0];
+        existing[id] = {};
+        exHeaders.slice(1).forEach((h, i) => {
+          if (h && row[i+1]) existing[id][h] = row[i+1];
+        });
+      });
+    }
+
+    // 受け取ったデータを既存にマージ（受信データを優先、ただし空文字は既存を保持しない＝削除扱い）
+    const ids = Object.keys(attData);
+    ids.forEach(id => {
+      if (!existing[id]) existing[id] = {};
+      const incoming = attData[id] || {};
+      Object.keys(incoming).forEach(p => {
+        const v = incoming[p];
+        if (v === '' || v === null || v === undefined) {
+          delete existing[id][p]; // 明示的に空にされた＝削除
+        } else {
+          existing[id][p] = v;
+        }
       });
     });
+
+    // 全日程ID・全家族を集約
+    const allIds = Object.keys(existing);
+    const parentsSet = new Set();
+    allIds.forEach(id => Object.keys(existing[id] || {}).forEach(p => parentsSet.add(p)));
+    const parents = Array.from(parentsSet);
+
+    sheet.clearContents();
+    if (!allIds.length || !parents.length) return { success: true };
+
+    const headers = ['日程ID', ...parents];
+    sheet.getRange(1,1,1,headers.length).setValues([headers]);
+    sheet.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
+
+    const rows = allIds.map(id => {
+      const att = existing[id] || {};
+      return [id, ...parents.map(p => att[p] || '')];
+    });
+    sheet.getRange(2,1,rows.length,headers.length).setValues(rows);
+
+    rows.forEach((row, ri) => {
+      parents.forEach((p, pi) => {
+        const v = row[pi+1];
+        const cell = sheet.getRange(ri+2, pi+2);
+        if (v==='◯') cell.setBackground('#e8f5ee').setFontColor('#1a7a3f');
+        else if (v==='●') cell.setBackground('#e8eef5').setFontColor('#1a4a7a');
+        else if (v==='×') cell.setBackground('#fdecea').setFontColor('#c0392b');
+        else if (v==='△') cell.setBackground('#fef9e7').setFontColor('#b7950b');
+      });
+    });
+
+    return { success: true };
+  } finally {
+    lock.releaseLock();
   }
-
-  // 受け取ったデータを既存にマージ（受信データを優先、ただし空文字は既存を保持しない＝削除扱い）
-  const ids = Object.keys(attData);
-  ids.forEach(id => {
-    if (!existing[id]) existing[id] = {};
-    const incoming = attData[id] || {};
-    Object.keys(incoming).forEach(p => {
-      const v = incoming[p];
-      if (v === '' || v === null || v === undefined) {
-        delete existing[id][p]; // 明示的に空にされた＝削除
-      } else {
-        existing[id][p] = v;
-      }
-    });
-  });
-
-  // 全日程ID・全家族を集約
-  const allIds = Object.keys(existing);
-  const parentsSet = new Set();
-  allIds.forEach(id => Object.keys(existing[id] || {}).forEach(p => parentsSet.add(p)));
-  const parents = Array.from(parentsSet);
-
-  sheet.clearContents();
-  if (!allIds.length || !parents.length) return { success: true };
-
-  const headers = ['日程ID', ...parents];
-  sheet.getRange(1,1,1,headers.length).setValues([headers]);
-  sheet.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
-
-  const rows = allIds.map(id => {
-    const att = existing[id] || {};
-    return [id, ...parents.map(p => att[p] || '')];
-  });
-  sheet.getRange(2,1,rows.length,headers.length).setValues(rows);
-
-  rows.forEach((row, ri) => {
-    parents.forEach((p, pi) => {
-      const v = row[pi+1];
-      const cell = sheet.getRange(ri+2, pi+2);
-      if (v==='◯') cell.setBackground('#e8f5ee').setFontColor('#1a7a3f');
-      else if (v==='●') cell.setBackground('#e8eef5').setFontColor('#1a4a7a');
-      else if (v==='×') cell.setBackground('#fdecea').setFontColor('#c0392b');
-      else if (v==='△') cell.setBackground('#fef9e7').setFontColor('#b7950b');
-    });
-  });
-
-  return { success: true };
 }
 
 // ===== 出欠データ全削除 =====
@@ -393,17 +488,24 @@ function clearAttendance() {
 
 // ===== 出欠データ1行削除（日程ID指定） =====
 function deleteAttendanceRow(sid) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(SHEET_ATTENDANCE);
-  if (!sheet) return { success: true };
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(sid)) {
-      sheet.deleteRow(i + 1);
-      break;
+  const lock = LockService.getScriptLock();
+  const gotLock = lock.tryLock(15000);
+  if (!gotLock) return { error: 'サーバーが混み合っています。もう一度お試しください。' };
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_ATTENDANCE);
+    if (!sheet) return { success: true };
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(sid)) {
+        sheet.deleteRow(i + 1);
+        break;
+      }
     }
+    return { success: true };
+  } finally {
+    lock.releaseLock();
   }
-  return { success: true };
 }
 
 // ===== ログ追記（追記専用・アプリからは読み出さない保険） =====
