@@ -1166,7 +1166,15 @@ function renderVenues() {
 
 // 日程リスト（localStorage永続）
 function getSchedules() {
-  return JSON.parse(localStorage.getItem('fc_schedules') || '[]');
+  // deleted:true の日程は「削除済み」印。どの画面にも出さない
+  return JSON.parse(localStorage.getItem('fc_schedules') || '[]').filter(function(s){ return s && !s.deleted; });
+}
+// 新しい日程ID：削除済みIDと絶対に重ならないよう、末尾に時刻ベースの一意な値を付ける
+// （同じ日付・学年で作り直した日程が、削除マーカーに巻き込まれて消えるのを防ぐ）
+var _schedIdSeq = 0;
+function _newSchedId(date, grade) {
+  _schedIdSeq = (_schedIdSeq + 1) % 1296;
+  return date + '_' + grade + '_' + Date.now().toString(36) + _schedIdSeq.toString(36) + Math.floor(Math.random()*1296).toString(36);
 }
 function saveSchedules(s) {
   localStorage.setItem('fc_schedules', JSON.stringify(s));
@@ -1335,7 +1343,7 @@ function pushMasterNow() {
   if (_masterPushTimer) clearTimeout(_masterPushTimer);
   _masterPushing = true;
   var master = {
-    schedules:  JSON.parse(localStorage.getItem('fc_schedules') || '[]'),
+    schedules:  _schedulesForPush(),
     parents:    JSON.parse(localStorage.getItem('fc_parents') || '[]'),
     venues:     JSON.parse(localStorage.getItem('fc_venues') || '[]'),
     matchNames: JSON.parse(localStorage.getItem('fc_match_names') || '[]'),
@@ -1353,11 +1361,15 @@ function pushMasterNow() {
 
 function deleteSchedule(sid) {
   if (!confirm('この日程を削除しますか？')) return;
-  var scheds = getSchedules();
-  var target = scheds.find(function(s){return s.id===sid;});
-  var remaining = scheds.filter(function(s){return s.id!==sid;});
-  // ローカルのみ更新（クラウドはマージ方式のため、削除は専用アクションで行う）
-  localStorage.setItem('fc_schedules', JSON.stringify(remaining));
+  var allScheds = JSON.parse(localStorage.getItem('fc_schedules') || '[]');
+  var target = allScheds.find(function(s){return s.id===sid;});
+  // 日程そのものに「削除済み」印を付けて残す。
+  // この印は通常の保存(saveMaster)で全端末に広がるので、サーバー側の専用削除が失敗しても
+  // 他の家族の端末からも確実に消える（getSchedulesが印付きを除外する）。
+  var marked = allScheds.map(function(s){
+    return s.id===sid ? Object.assign({}, s, {deleted:true, archived:true, _deletedAt:Date.now()}) : s;
+  });
+  localStorage.setItem('fc_schedules', JSON.stringify(marked));
   // ローカルの出欠・配車データからも削除（ローカルのみ更新）
   var attData = getAttendanceData();
   delete attData[sid];
@@ -1367,9 +1379,10 @@ function deleteSchedule(sid) {
   localStorage.setItem('fc_carpool', JSON.stringify(cpData));
   // サーバーが削除を確認するまで、この日程を「削除待ち」として端末に記録する。
   // 削除待ちの間はクラウドから古い一覧が届いても表示しない（＝復活させない）。
-  _markSchedDeletePending(sid);
+  _markSchedDeletePending(sid, marked.find(function(s){ return s.id===sid; }));
   if (typeof gasUrl !== 'undefined' && gasUrl) {
-    _sendSchedDelete(sid, true);
+    pushMasterNow();          // 削除済み印を即座にクラウドへ（全端末に反映させる本命ルート）
+    _sendSchedDelete(sid, true); // クラウドから完全に消す（成功すれば印ごと消える）
     gasReq({action: 'deleteAttendanceRow', sid: sid}).catch(function(){});
     // ログ追記（保険・送りっぱなし）
     gasReq({action:'appendLog', data:JSON.stringify({
@@ -1388,10 +1401,21 @@ function _getSchedDelMap() {
 function _saveSchedDelMap(m) {
   try { localStorage.setItem('fc_sched_del_pending', JSON.stringify(m)); } catch(e) {}
 }
-function _markSchedDeletePending(sid) {
+function _markSchedDeletePending(sid, markedSched) {
   var m = _getSchedDelMap();
-  m[sid] = { t: Date.now(), done: false, tries: 0, lastTry: 0 };
+  m[sid] = { t: Date.now(), done: false, tries: 0, lastTry: 0, m: markedSched || null };
   _saveSchedDelMap(m);
+}
+// クラウドへ送るschedules配列：削除待ちの日程は必ず「削除済み印付き」で送る
+// （他端末の古いデータで印が上書きされても、送るたびに印を付け直す）
+function _schedulesForPush() {
+  var arr = JSON.parse(localStorage.getItem('fc_schedules') || '[]');
+  var m = _getSchedDelMap();
+  var pend = Object.keys(m).filter(function(k){ return !m[k].done && m[k].m; });
+  if (!pend.length) return arr;
+  arr = arr.filter(function(s){ return pend.indexOf(s.id) < 0; });
+  pend.forEach(function(k){ arr.push(m[k].m); });
+  return arr;
 }
 var _schedDelInFlight = {};
 function _sendSchedDelete(sid, showError) {
@@ -1407,7 +1431,7 @@ function _sendSchedDelete(sid, showError) {
     } else {
       var msg = (res && res.error) ? res.error : JSON.stringify(res);
       console.error('日程削除がサーバーで失敗:', sid, msg);
-      if (showError) alert('クラウド側で日程の削除に失敗しました。\n（この端末では非表示のまま、自動で再送を続けます）\n\nサーバーの応答: ' + msg);
+      if (showError) showToast('⚠ 完全削除は失敗（全端末で非表示にはしました）: ' + msg);
     }
   }).catch(function(err) {
     _schedDelInFlight[sid] = false;
@@ -1423,7 +1447,7 @@ function _retryPendingSchedDeletes() {
     var e = m[sid];
     if (e.done) {
       if (now - (e.doneAt || 0) > 120000) { delete m[sid]; changed = true; }
-    } else if (now - (e.lastTry || 0) > 15000) {
+    } else if ((e.tries || 0) < 20 && now - (e.lastTry || 0) > 15000) {
       _sendSchedDelete(sid, false);
     }
   });
@@ -1717,11 +1741,8 @@ function addSchedule() {
   if (schedType === '試合' && matchName) {
     finalNote = matchName + (note ? ' ' + note : '');
   }
-  var id = date + '_' + grade;
+  var id = _newSchedId(date, grade);
   var scheds = getSchedules();
-  // 同じIDがあれば連番で回避
-  var n = 2;
-  while (scheds.find(function(s){return s.id===id;})) { id = date+'_'+grade+'_'+n; n++; }
   scheds.push({id:id, date:date, grade:grade, venue:venue, note:finalNote, carpool:carpool, schedType:schedType, matchName:matchName, archived:false, locked:false, _createdAt: Date.now()});
   scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
   // 現在の日程IDだけに絞り込む
@@ -1881,14 +1902,7 @@ function importFromExcel() {
   var scheds = getSchedules();
   var added = 0;
   excelRows.forEach(function(r) {
-    var id = r.date + '_' + r.grade;
-    // 重複チェック
-    if (scheds.find(function(s){return s.id===id;})) {
-      // 連番でユニーク化
-      var n = 2;
-      while (scheds.find(function(s){return s.id===id+'_'+n;})) n++;
-      id = id + '_' + n;
-    }
+    var id = _newSchedId(r.date, r.grade);
     scheds.push({id:id, date:r.date, grade:r.grade, venue:r.venue, note:'', carpool:false, archived:false, locked:false});
     added++;
   });
@@ -2336,7 +2350,7 @@ function pushMasterToCloud() {
   _masterPushTimer = setTimeout(function() {
     if (typeof gasUrl === 'undefined' || !gasUrl) { _masterPushing = false; return; }
     var master = {
-      schedules:  JSON.parse(localStorage.getItem('fc_schedules') || '[]'),
+      schedules:  _schedulesForPush(),
       parents:    JSON.parse(localStorage.getItem('fc_parents') || '[]'),
       venues:     JSON.parse(localStorage.getItem('fc_venues') || '[]'),
       matchNames: JSON.parse(localStorage.getItem('fc_match_names') || '[]'),
@@ -2399,6 +2413,19 @@ function startAutoSync() {
       }
 
       if (Array.isArray(master.schedules) && !_masterPushing) {
+        // 削除待ちの日程が「印なし」でクラウドに残っていたら（他端末の古いデータで上書きされた）、印を送り直す
+        var _pm = _getSchedDelMap();
+        // 前バージョンで削除した日程（印の控えが無い）は、クラウドにある本体から印付きの控えを作る
+        var _pmChanged = false;
+        master.schedules.forEach(function(s){
+          if (s && _pm[s.id] && !_pm[s.id].done && !_pm[s.id].m) {
+            _pm[s.id].m = Object.assign({}, s, {deleted:true, archived:true, _deletedAt:_pm[s.id].t || Date.now()});
+            _pmChanged = true;
+          }
+        });
+        if (_pmChanged) _saveSchedDelMap(_pm);
+        var _needRepush = master.schedules.some(function(s){ return s && _pm[s.id] && !_pm[s.id].done && _pm[s.id].m && !s.deleted; });
+        if (_needRepush) pushMasterNow();
         var cloudScheds = _filterOutRecentlyDeletedScheds(master.schedules);
         var cur = localStorage.getItem('fc_schedules') || '[]';
         var nw = JSON.stringify(cloudScheds);
