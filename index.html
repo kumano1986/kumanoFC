@@ -847,7 +847,6 @@ function moveFamily(idx, dir) {
 var _dragState = null;
 var _carpoolEditTime = 0; // 配車を最後に編集した時刻（ローカル優先保護用）
 var _dutyEditTime = 0; // 当番を最後に編集した時刻
-var _deletedSchedIds = {}; // sid -> 削除した時刻。サーバー反映前にクラウド同期で復活するのを防ぐガード
 function setupFamilyDrag() {
   setupDragList('family-drag-list', '.family-row', 'family', 8);
 }
@@ -1366,20 +1365,11 @@ function deleteSchedule(sid) {
   var cpData = getCarpoolData();
   delete cpData[sid];
   localStorage.setItem('fc_carpool', JSON.stringify(cpData));
-  // サーバー側の削除が完了するまでの間、自動同期でこの日程が復活しないようガードする
-  // （削除リクエストは非同期のため、間に合わずに古いクラウドデータで上書きされる事故を防ぐ）
-  _deletedSchedIds[sid] = Date.now();
-  // クラウドからは明示的にこの日程だけ削除（失敗時は1回だけ再試行）
+  // サーバーが削除を確認するまで、この日程を「削除待ち」として端末に記録する。
+  // 削除待ちの間はクラウドから古い一覧が届いても表示しない（＝復活させない）。
+  _markSchedDeletePending(sid);
   if (typeof gasUrl !== 'undefined' && gasUrl) {
-    var doDeleteReq = function(retry) {
-      return gasReq({action: 'deleteScheduleFromMaster', sid: sid}).catch(function(){
-        if (retry) return doDeleteReq(false);
-      });
-    };
-    doDeleteReq(true).then(function(){
-      // サーバー側の削除完了を確認できたらガードを解除（少し余裕を持たせる）
-      setTimeout(function(){ delete _deletedSchedIds[sid]; }, 3000);
-    });
+    _sendSchedDelete(sid, true);
     gasReq({action: 'deleteAttendanceRow', sid: sid}).catch(function(){});
     // ログ追記（保険・送りっぱなし）
     gasReq({action:'appendLog', data:JSON.stringify({
@@ -1389,18 +1379,69 @@ function deleteSchedule(sid) {
   renderAttendancePage();
 }
 
-// クラウドから来たschedules配列から、削除直後でサーバー反映待ちのものを除外する
+// ===== 日程削除の確実化 =====
+// 削除待ちリスト：{ sid: { t: 削除操作時刻, done: サーバー確認済みか, doneAt: 確認時刻, tries: 試行回数, lastTry: 最終試行時刻 } }
+// localStorageに保存するので、アプリを閉じても再起動後に再送される。
+function _getSchedDelMap() {
+  try { return JSON.parse(localStorage.getItem('fc_sched_del_pending') || '{}') || {}; } catch(e) { return {}; }
+}
+function _saveSchedDelMap(m) {
+  try { localStorage.setItem('fc_sched_del_pending', JSON.stringify(m)); } catch(e) {}
+}
+function _markSchedDeletePending(sid) {
+  var m = _getSchedDelMap();
+  m[sid] = { t: Date.now(), done: false, tries: 0, lastTry: 0 };
+  _saveSchedDelMap(m);
+}
+var _schedDelInFlight = {};
+function _sendSchedDelete(sid, showError) {
+  if (_schedDelInFlight[sid]) return;
+  _schedDelInFlight[sid] = true;
+  var m = _getSchedDelMap();
+  if (m[sid]) { m[sid].tries = (m[sid].tries || 0) + 1; m[sid].lastTry = Date.now(); _saveSchedDelMap(m); }
+  gasReq({action: 'deleteScheduleFromMaster', sid: sid}).then(function(res) {
+    _schedDelInFlight[sid] = false;
+    if (res && res.success) {
+      var m2 = _getSchedDelMap();
+      if (m2[sid]) { m2[sid].done = true; m2[sid].doneAt = Date.now(); _saveSchedDelMap(m2); }
+    } else {
+      var msg = (res && res.error) ? res.error : JSON.stringify(res);
+      console.error('日程削除がサーバーで失敗:', sid, msg);
+      if (showError) alert('クラウド側で日程の削除に失敗しました。\n（この端末では非表示のまま、自動で再送を続けます）\n\nサーバーの応答: ' + msg);
+    }
+  }).catch(function(err) {
+    _schedDelInFlight[sid] = false;
+    console.error('日程削除の通信に失敗:', sid, err);
+  });
+}
+// 自動同期のたびに呼ぶ：未確認の削除を再送し、確認済みで十分時間が経ったものは掃除する
+function _retryPendingSchedDeletes() {
+  if (typeof gasUrl === 'undefined' || !gasUrl) return;
+  var m = _getSchedDelMap();
+  var now = Date.now(), changed = false;
+  Object.keys(m).forEach(function(sid) {
+    var e = m[sid];
+    if (e.done) {
+      if (now - (e.doneAt || 0) > 120000) { delete m[sid]; changed = true; }
+    } else if (now - (e.lastTry || 0) > 15000) {
+      _sendSchedDelete(sid, false);
+    }
+  });
+  if (changed) _saveSchedDelMap(m);
+}
+
+// クラウドから来たschedules配列から、削除待ち（または削除確認直後2分以内）の日程を除外する
 function _filterOutRecentlyDeletedScheds(schedArr) {
   if (!Array.isArray(schedArr)) return schedArr;
-  var nowMs = Date.now();
-  var guardMs = 120000; // 2分：ネットワーク遅延・GASのコールドスタート等を見込んだ安全マージン
-  var hasGuard = false;
-  for (var k in _deletedSchedIds) { if (nowMs - _deletedSchedIds[k] < guardMs) { hasGuard = true; break; } }
-  if (!hasGuard) return schedArr;
+  var m = _getSchedDelMap();
+  var keys = Object.keys(m);
+  if (!keys.length) return schedArr;
+  var now = Date.now();
   return schedArr.filter(function(s){
-    if (!s || !s.id) return true;
-    var delAt = _deletedSchedIds[s.id];
-    return !(delAt && (nowMs - delAt) < guardMs);
+    if (!s || !s.id || !m[s.id]) return true;
+    var e = m[s.id];
+    if (!e.done) return false;                          // サーバー未確認 → 出さない
+    return !(now - (e.doneAt || 0) < 120000);           // 確認直後2分は念のため出さない
   });
 }
 
@@ -2338,6 +2379,7 @@ function startAutoSync() {
   stopAutoSync();
   _autoSyncTimer = setInterval(function() {
     if (!gasUrl) return;
+    _retryPendingSchedDeletes();
     // マスタデータ同期
     gasReq({action:'getMaster'}).then(function(master) {
       if (!master || master.error) return;
