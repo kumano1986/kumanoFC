@@ -847,6 +847,7 @@ function moveFamily(idx, dir) {
 var _dragState = null;
 var _carpoolEditTime = 0; // 配車を最後に編集した時刻（ローカル優先保護用）
 var _dutyEditTime = 0; // 当番を最後に編集した時刻
+var _deletedSchedIds = {}; // sid -> 削除した時刻。サーバー反映前にクラウド同期で復活するのを防ぐガード
 function setupFamilyDrag() {
   setupDragList('family-drag-list', '.family-row', 'family', 8);
 }
@@ -1365,9 +1366,20 @@ function deleteSchedule(sid) {
   var cpData = getCarpoolData();
   delete cpData[sid];
   localStorage.setItem('fc_carpool', JSON.stringify(cpData));
-  // クラウドからは明示的にこの日程だけ削除
+  // サーバー側の削除が完了するまでの間、自動同期でこの日程が復活しないようガードする
+  // （削除リクエストは非同期のため、間に合わずに古いクラウドデータで上書きされる事故を防ぐ）
+  _deletedSchedIds[sid] = Date.now();
+  // クラウドからは明示的にこの日程だけ削除（失敗時は1回だけ再試行）
   if (typeof gasUrl !== 'undefined' && gasUrl) {
-    gasReq({action: 'deleteScheduleFromMaster', sid: sid}).catch(function(){});
+    var doDeleteReq = function(retry) {
+      return gasReq({action: 'deleteScheduleFromMaster', sid: sid}).catch(function(){
+        if (retry) return doDeleteReq(false);
+      });
+    };
+    doDeleteReq(true).then(function(){
+      // サーバー側の削除完了を確認できたらガードを解除（少し余裕を持たせる）
+      setTimeout(function(){ delete _deletedSchedIds[sid]; }, 3000);
+    });
     gasReq({action: 'deleteAttendanceRow', sid: sid}).catch(function(){});
     // ログ追記（保険・送りっぱなし）
     gasReq({action:'appendLog', data:JSON.stringify({
@@ -1375,6 +1387,21 @@ function deleteSchedule(sid) {
     })}).catch(function(){});
   }
   renderAttendancePage();
+}
+
+// クラウドから来たschedules配列から、削除直後でサーバー反映待ちのものを除外する
+function _filterOutRecentlyDeletedScheds(schedArr) {
+  if (!Array.isArray(schedArr)) return schedArr;
+  var nowMs = Date.now();
+  var guardMs = 120000; // 2分：ネットワーク遅延・GASのコールドスタート等を見込んだ安全マージン
+  var hasGuard = false;
+  for (var k in _deletedSchedIds) { if (nowMs - _deletedSchedIds[k] < guardMs) { hasGuard = true; break; } }
+  if (!hasGuard) return schedArr;
+  return schedArr.filter(function(s){
+    if (!s || !s.id) return true;
+    var delAt = _deletedSchedIds[s.id];
+    return !(delAt && (nowMs - delAt) < guardMs);
+  });
 }
 
 // ===== 日程編集 =====
@@ -2295,7 +2322,7 @@ async function pullMasterFromCloud() {
       localStorage.setItem('fc_players', JSON.stringify(master.players));
       players = master.players;
     }
-    if (master.schedules && Array.isArray(master.schedules) && !_masterPushing)  { localStorage.setItem('fc_schedules',   JSON.stringify(master.schedules));  }
+    if (master.schedules && Array.isArray(master.schedules) && !_masterPushing)  { localStorage.setItem('fc_schedules',   JSON.stringify(_filterOutRecentlyDeletedScheds(master.schedules)));  }
     if (Array.isArray(master.parents) && !_masterPushing)    { localStorage.setItem('fc_parents',     JSON.stringify(master.parents));    _parentsCache = null; }
     if (Array.isArray(master.venues) && !_masterPushing)     { localStorage.setItem('fc_venues',      JSON.stringify(master.venues));     }
     if (Array.isArray(master.matchNames) && !_masterPushing) { localStorage.setItem('fc_match_names', JSON.stringify(master.matchNames)); }
@@ -2330,11 +2357,12 @@ function startAutoSync() {
       }
 
       if (Array.isArray(master.schedules) && !_masterPushing) {
+        var cloudScheds = _filterOutRecentlyDeletedScheds(master.schedules);
         var cur = localStorage.getItem('fc_schedules') || '[]';
-        var nw = JSON.stringify(master.schedules);
+        var nw = JSON.stringify(cloudScheds);
         if (cur !== nw) {
           var localScheds = JSON.parse(cur);
-          var cloudIds = master.schedules.map(function(s){return s.id;});
+          var cloudIds = cloudScheds.map(function(s){return s.id;});
           var nowMs = Date.now();
           // ローカル独自分のうち、追加から30秒以内のものだけ保護
           var localOnly = localScheds.filter(function(s){
@@ -2342,7 +2370,7 @@ function startAutoSync() {
                    s._createdAt && (nowMs - s._createdAt) < 30000;
           });
           if (localOnly.length > 0) {
-            var merged = master.schedules.concat(localOnly);
+            var merged = cloudScheds.concat(localOnly);
             merged.sort(function(a,b){ return a.date.localeCompare(b.date); });
             localStorage.setItem('fc_schedules', JSON.stringify(merged));
           } else {
