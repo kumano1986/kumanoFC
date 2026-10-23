@@ -81,7 +81,16 @@ function saveMaster(obj) {
       const existingSchedules = Array.isArray(existing.schedules) ? existing.schedules : [];
       const merged = {};
       existingSchedules.forEach(function(s){ if (s && s.id && !delMap[s.id]) merged[s.id] = s; });
-      obj.schedules.forEach(function(s){ if (s && s.id && !delMap[s.id]) merged[s.id] = s; });
+      // 予定表取込でサーバーが付けた印は、送ってきた端末の古いデータに項目自体が無ければ消さない
+      // （印を消すときはアプリが null を入れて送る）
+      const SERVER_FIELDS = ['src', 'pendingUpdate', 'pendingIgnore', 'srcMissing', 'srcMissingAck', 'dateWarn', 'dateWarnAck'];
+      obj.schedules.forEach(function(s){
+        if (s && s.id && !delMap[s.id]) {
+          const ex = merged[s.id];
+          if (ex) SERVER_FIELDS.forEach(function(f){ if (!(f in s) && (f in ex)) s[f] = ex[f]; });
+          merged[s.id] = s;
+        }
+      });
       obj.schedules = Object.values(merged);
     }
 
@@ -712,4 +721,317 @@ function appendLog(data) {
   ];
   sheet.appendRow(row);
   return { success: true };
+}
+
+// ============================================
+// 予定表メールの自動取り込み
+//   指定アドレスから届いた「予定表」Excelを読み、出欠確認の日程を作る。
+//   ・新しい日程だけ自動で追加する（既存の日程は自動で書き換えない）
+//   ・既存の日程と内容が違えば「予定表と違いがあります」の印を付ける（★の方がアプリで反映/無視を選ぶ）
+//   ・最新の予定表から消えた日程は「載っていません」の印を付ける（自動削除はしない）
+//   ・書かれた曜日と実際の曜日が違えば「曜日ずれ」の印を付ける
+//   ・出欠・配車・当番の入力には一切触れない
+// 初回だけ、エディタで setupYoteiTrigger を選んで実行してください（15分ごとの自動チェックが始まります）
+// ============================================
+const YOTEI_SENDER = 'tkm0612_1004@sea.plala.or.jp';
+const YOTEI_GRADES = [1, 2];           // 取り込む学年（「1・2年」「2・3年」のような行は、どれかが含まれれば取り込む）
+const YOTEI_PROP_DONE = 'yoteiProcessedMsgIds';
+const YOTEI_PROP_ERR  = 'yoteiErrorNotified';
+const YOTEI_WD = ['日','月','火','水','木','金','土'];
+
+function setupYoteiTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t){
+    if (t.getHandlerFunction() === 'checkYoteiMail') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('checkYoteiMail').timeBased().everyMinutes(15).create();
+  const r = checkYoteiMail(); // 初回の実行（権限の確認も兼ねる）
+  Logger.log('自動チェックを設定しました。今回の結果: ' + JSON.stringify(r));
+}
+
+function checkYoteiMail() {
+  const props = PropertiesService.getScriptProperties();
+  let done = [], errNotified = [];
+  try { done = JSON.parse(props.getProperty(YOTEI_PROP_DONE) || '[]'); } catch(e) {}
+  try { errNotified = JSON.parse(props.getProperty(YOTEI_PROP_ERR) || '[]'); } catch(e) {}
+  const results = [];
+  const threads = GmailApp.search('from:' + YOTEI_SENDER + ' has:attachment newer_than:30d', 0, 20);
+  threads.forEach(function(th) {
+    th.getMessages().forEach(function(msg) {
+      const mid = msg.getId();
+      if (done.indexOf(mid) >= 0) return;
+      if (String(msg.getFrom()).toLowerCase().indexOf(YOTEI_SENDER) < 0) { done.push(mid); return; } // 同じスレッドの他人の返信
+      const subject = msg.getSubject() || '';
+      let ok = true;
+      msg.getAttachments().forEach(function(att) {
+        const name = att.getName() || '';
+        if (!/\.xlsx?$/i.test(name)) return;
+        if (name.indexOf('予定表') < 0 && subject.indexOf('予定表') < 0) return;
+        try {
+          const values = yoteiReadValues_(att);
+          const parsed = parseYotei(values, msg.getDate());
+          const res = applyYoteiToMaster(parsed, name);
+          results.push({ name: name, res: res, parsed: parsed });
+          appendLog({ family: '(予定表自動取込)', kind: '予定表取込', date: parsed.year + '-' + parsed.month,
+            attendance: '追加' + res.added.length + ' 違い' + res.changed.length + ' 掲載なし' + res.missing.length + ' 曜日ずれ' + res.wdWarn.length, sid: name });
+        } catch (err) {
+          ok = false;
+          if (errNotified.indexOf(mid) < 0) { results.push({ name: name, error: yoteiErrText_(err) }); errNotified.push(mid); }
+        }
+      });
+      if (ok) done.push(mid); // 失敗したメールは次回もう一度試す
+    });
+  });
+  props.setProperty(YOTEI_PROP_DONE, JSON.stringify(done.slice(-300)));
+  props.setProperty(YOTEI_PROP_ERR, JSON.stringify(errNotified.slice(-100)));
+  if (results.length) yoteiSendSummary_(results);
+  return results.map(function(r){ return r.error ? { name: r.name, error: r.error } : { name: r.name, added: r.res.added.length, changed: r.res.changed.length, missing: r.res.missing.length, wdWarn: r.res.wdWarn.length }; });
+}
+
+function yoteiErrText_(err) {
+  const s = String(err && err.message ? err.message : err);
+  if (/Drive is not defined/.test(s)) return 'GASに「Drive API」サービスが追加されていません。エディタ左の「サービス ＋」から Drive API を追加してください。';
+  return s;
+}
+
+// Excel添付をスプレッドシートに変換して、表示どおりの文字で読み出す（変換した一時ファイルはゴミ箱へ）
+function yoteiReadValues_(att) {
+  const blob = att.copyBlob();
+  let fileId;
+  if (Drive.Files.create) {        // Drive API v3
+    fileId = Drive.Files.create({ name: 'tmp_予定表取込', mimeType: MimeType.GOOGLE_SHEETS }, blob).id;
+  } else {                          // Drive API v2
+    fileId = Drive.Files.insert({ title: 'tmp_予定表取込', mimeType: MimeType.GOOGLE_SHEETS }, blob, { convert: true }).id;
+  }
+  try {
+    const sheets = SpreadsheetApp.openById(fileId).getSheets();
+    for (let i = 0; i < sheets.length; i++) {
+      const v = sheets[i].getDataRange().getDisplayValues();
+      if (v.some(function(row){ return row.some(function(c){ return yoteiNorm_(c) === '学年'; }); })) return v;
+    }
+    return sheets[0].getDataRange().getDisplayValues();
+  } finally {
+    try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) {}
+  }
+}
+
+// 全角数字・全角かっこ等を半角にそろえる
+function yoteiNorm_(s) {
+  return String(s == null ? '' : s)
+    .replace(/[０-９]/g, function(c){ return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
+    .replace(/（/g, '(').replace(/）/g, ')').replace(/：/g, ':').replace(/～/g, '〜')
+    .replace(/[　\s]+/g, ' ').trim();
+}
+
+// 予定表の表を日程の行に変換する（シートの読み出しとは切り離した純粋な処理）
+function parseYotei(values, receivedDate) {
+  const recv = receivedDate ? new Date(receivedDate) : new Date();
+  const recvY = Number(Utilities.formatDate(recv, 'Asia/Tokyo', 'yyyy'));
+  const recvM = Number(Utilities.formatDate(recv, 'Asia/Tokyo', 'M'));
+  let month = 0, title = '';
+  for (let r = 0; r < Math.min(values.length, 6) && !month; r++) {
+    values[r].forEach(function(c) {
+      const t = yoteiNorm_(c);
+      const m = t.match(/予定表.*?(\d{1,2})\s*月/) || t.match(/(\d{1,2})\s*月.*予定表/);
+      if (m && !month) { month = Number(m[1]); title = t; }
+    });
+  }
+  if (!month) throw new Error('予定表の月（例：予定表（10月））が見つかりませんでした');
+  let year = recvY;
+  if (month < recvM - 6) year++;        // 12月に届いた1月の予定表など
+  else if (month > recvM + 6) year--;
+
+  // 見出し行（学年・時間・場所・内容・当番）
+  let hr = -1, col = {};
+  for (let r = 0; r < values.length && hr < 0; r++) {
+    values[r].forEach(function(c, i) {
+      const t = yoteiNorm_(c);
+      if (t === '学年') { hr = r; col.grade = i; }
+    });
+    if (hr >= 0) values[r].forEach(function(c, i) {
+      const t = yoteiNorm_(c);
+      if (t === '時間') col.time = i;
+      if (t === '場所') col.place = i;
+      if (t === '内容') col.content = i;
+      if (t === '当番') col.duty = i;
+    });
+  }
+  if (hr < 0 || col.time == null || col.place == null) throw new Error('予定表の見出し（学年・時間・場所）が見つかりませんでした');
+  const dateCol = col.grade > 0 ? col.grade - 1 : 0;
+  const contentEnd = col.duty != null ? col.duty : (col.content != null ? col.content + 3 : col.place + 4);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  const rows = [], warnings = [];
+  let curDay = 0, dayWritten = {}; // 日付 → 書かれた曜日
+  for (let r = hr + 1; r < values.length; r++) {
+    const row = values[r];
+    const a = yoteiNorm_(row[dateCol]);
+    const dm = a.match(/^(\d{1,2})/);
+    if (dm) curDay = Number(dm[1]);
+    const wm = a.match(/\(([日月火水木金土])/);
+    if (wm && curDay) dayWritten[curDay] = wm[1];
+
+    const g = yoteiNorm_(row[col.grade]);
+    if (!curDay || !g) continue;
+    const start = (yoteiNorm_(row[col.time]).match(/^(\d{1,2}:\d{2})$/) || [])[1] || '';
+    const end   = (yoteiNorm_(row[col.time + 2]).match(/^(\d{1,2}:\d{2})$/) || [])[1] || '';
+    const timeNote = start ? '' : yoteiNorm_(row[col.time + 1]).replace('〜', '');
+    const place = String(row[col.place] || '').replace(/[　]+/g, ' ').trim();
+    if (!start && !place) continue; // 注意書きの行など
+    const nums = (g.match(/\d/g) || []).map(Number);
+    if (!nums.some(function(n){ return YOTEI_GRADES.indexOf(n) >= 0; })) continue;
+
+    const parts = [];
+    for (let i = (col.content != null ? col.content : col.place + 1); i < contentEnd; i++) {
+      const t = String(row[i] || '').replace(/[　\s]+/g, ' ').trim();
+      if (t) parts.push(t);
+    }
+    const content = parts.join(' ');
+    const isMatch = /◎|〇|○|試合|vs|ＶＳ/i.test(content);
+    let matchName = '';
+    if (isMatch) {
+      matchName = content.replace(/^[◎〇○※\s]+/, '');
+      const cut = matchName.search(/\s|vs|ＶＳ|現地|集合|板七|板五|板二/i);
+      if (cut > 0) matchName = matchName.slice(0, cut);
+      matchName = matchName.trim();
+    }
+    const note = isMatch ? content : content.replace(/^練習\s*/, '');
+    const mm = ('0' + month).slice(-2), dd = ('0' + curDay).slice(-2);
+    const date = year + '-' + mm + '-' + dd;
+    const gradeLabel = g.replace(/\s/g, '');
+    rows.push({
+      date: date, day: curDay, grade: gradeLabel, start: start, end: end, timeNote: timeNote,
+      place: place, venue: place + (start ? ' ' + start + '〜' + end : (timeNote ? ' ' + timeNote : '')),
+      schedType: isMatch ? '試合' : '練習', matchName: matchName, note: note,
+      key: date + '|' + gradeLabel + '|' + start
+    });
+  }
+  // 曜日チェック
+  rows.forEach(function(x) {
+    if (x.day > daysInMonth) { x.wdWarn = '予定表に' + month + '/' + x.day + 'とありますが、' + month + '月は' + daysInMonth + '日までです。日付を確認してください'; return; }
+    const actual = YOTEI_WD[new Date(Date.UTC(year, month - 1, x.day)).getUTCDay()];
+    const written = dayWritten[x.day];
+    if (written && written !== actual) {
+      x.wdWarn = '予定表では' + month + '/' + x.day + '(' + written + ')ですが、実際の' + month + '/' + x.day + 'は' + actual + '曜日です。日付か曜日の誤りの可能性があります';
+    }
+  });
+  return { year: year, month: month, title: title, rows: rows, warnings: warnings };
+}
+
+function yoteiGradeNums_(gradeText) {
+  const t = yoteiNorm_(gradeText);
+  if (t.indexOf('全学年') >= 0) return [1, 2, 3, 4, 5, 6];
+  return (t.match(/\d/g) || []).map(Number);
+}
+function yoteiStartOf_(venue) {
+  const m = yoteiNorm_(venue).match(/(\d{1,2}:\d{2})\s*〜/);
+  return m ? m[1] : '';
+}
+
+// 読み取った行をマスタの日程に反映する（既存の日程は書き換えず、印を付けるだけ）
+function applyYoteiToMaster(parsed, fileName) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('サーバーが混み合っていたため取り込めませんでした（次回また試します）');
+  try {
+    const existing = getMaster();
+    const scheds = Array.isArray(existing.schedules) ? existing.schedules : [];
+    const del = getTombstoneMap(existing, 'schedules');
+    const seen = existing._yoteiSeen || {};
+    const today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+    const ym = parsed.year + '-' + ('0' + parsed.month).slice(-2);
+    const rows = parsed.rows.filter(function(r){ return r.date >= today; });
+    const live = scheds.filter(function(s){ return s && s.id && !s.deleted && !s.archived && !del[s.id]; });
+    const used = {}, matchOf = {};
+    const res = { added: [], changed: [], missing: [], wdWarn: [], skippedDeleted: [], same: 0 };
+
+    // 1回目：同じ行（日付・学年・開始時刻が一致）を探す
+    rows.forEach(function(r, i) {
+      const hit = live.find(function(s){ return !used[s.id] && ((s.src && s.src.key === r.key) ||
+        (s.date === r.date && yoteiNorm_(s.grade).replace(/\s/g,'') === r.grade && yoteiStartOf_(s.venue) === r.start)); });
+      if (hit) { used[hit.id] = true; matchOf[i] = hit; }
+    });
+    // 2回目：同じ日で学年が重なり、開始時刻が同じもの → それでもなければ、候補が1つだけのとき
+    rows.forEach(function(r, i) {
+      if (matchOf[i]) return;
+      const nums = yoteiGradeNums_(r.grade);
+      const cands = live.filter(function(s){ return !used[s.id] && s.date === r.date &&
+        yoteiGradeNums_(s.grade).some(function(n){ return nums.indexOf(n) >= 0; }); });
+      const hit = cands.find(function(s){ return yoteiStartOf_(s.venue) === r.start; }) || (cands.length === 1 ? cands[0] : null);
+      if (hit) { used[hit.id] = true; matchOf[i] = hit; }
+    });
+
+    const newOnes = [];
+    rows.forEach(function(r, i) {
+      const hit = matchOf[i];
+      if (hit) {
+        if (!hit.src) hit.src = { key: r.key, file: fileName };
+        else hit.src.key = r.key;
+        hit.srcMissing = null;
+        const sig = r.venue + '|' + r.schedType;
+        const differs = yoteiNorm_(hit.venue) !== yoteiNorm_(r.venue) || (hit.schedType || '練習') !== r.schedType;
+        if (differs && hit.pendingIgnore !== sig) {
+          if (!hit.pendingUpdate || hit.pendingUpdate.sig !== sig) {
+            hit.pendingUpdate = { sig: sig, venue: r.venue, schedType: r.schedType, matchName: r.matchName, note: r.note,
+              grade: r.grade, oldVenue: hit.venue, oldSchedType: hit.schedType || '練習', file: fileName, at: today };
+          }
+          res.changed.push({ date: r.date, grade: r.grade, from: hit.venue, to: r.venue });
+        } else {
+          if (!differs) hit.pendingUpdate = null;
+          res.same++;
+        }
+        if (r.wdWarn && hit.dateWarnAck !== r.wdWarn) { hit.dateWarn = r.wdWarn; res.wdWarn.push(r); }
+      } else if (seen[r.key]) {
+        res.skippedDeleted.push(r); // 以前取り込んだが、その後アプリで削除された日程は戻さない
+      } else {
+        const id = r.date + '_' + r.grade + '_y' + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
+        newOnes.push({ id: id, date: r.date, grade: r.grade, venue: r.venue, note: r.note, carpool: false,
+          schedType: r.schedType, matchName: r.matchName, archived: false, locked: false, _createdAt: Date.now(),
+          src: { key: r.key, file: fileName }, dateWarn: r.wdWarn || null });
+        res.added.push(r);
+        if (r.wdWarn) res.wdWarn.push(r);
+      }
+      seen[r.key] = r.date;
+    });
+
+    // この予定表の月に、以前取り込んだのに今回載っていない日程 → 印を付ける（削除はしない）
+    live.forEach(function(s) {
+      if (s.src && !used[s.id] && s.date >= today && s.date.slice(0, 7) === ym && !s.srcMissingAck) {
+        if (!s.srcMissing) { s.srcMissing = fileName; res.missing.push(s); }
+      }
+    });
+
+    // 古い記録は掃除（マスタの容量対策）
+    const cutoff = Utilities.formatDate(new Date(Date.now() - 120 * 24 * 3600 * 1000), 'Asia/Tokyo', 'yyyy-MM-dd');
+    Object.keys(seen).forEach(function(k){ if (seen[k] < cutoff) delete seen[k]; });
+
+    existing.schedules = scheds.concat(newOnes);
+    existing._yoteiSeen = seen;
+    const sheet = getSheet(SHEET_MASTER);
+    sheet.clearContents();
+    sheet.getRange(1,1).setValue('マスタデータ（JSON）');
+    sheet.getRange(1,1).setFontWeight('bold').setBackground('#2d7a4f').setFontColor('white');
+    sheet.getRange(2,1).setValue(JSON.stringify(existing));
+    return res;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 取り込み結果をGASの持ち主にメールで知らせる
+function yoteiSendSummary_(results) {
+  const md = function(d){ const p = d.split('-'); return (+p[1]) + '/' + (+p[2]) + '(' + YOTEI_WD[new Date(Date.UTC(+p[0], +p[1]-1, +p[2])).getUTCDay()] + ')'; };
+  let body = 'FC熊野アプリ：予定表の自動取り込み結果です。\n';
+  let warn = false;
+  results.forEach(function(x) {
+    body += '\n■ ' + x.name + '\n';
+    if (x.error) { body += '　取り込みに失敗しました：' + x.error + '\n'; warn = true; return; }
+    const r = x.res;
+    body += '　追加 ' + r.added.length + '件／内容の違い ' + r.changed.length + '件／予定表に載っていない ' + r.missing.length + '件／曜日ずれ ' + r.wdWarn.length + '件\n';
+    if (r.added.length) { body += '\n【追加した日程】\n'; r.added.forEach(function(a){ body += '　' + md(a.date) + ' ' + a.grade + ' ' + (a.schedType === '試合' ? '試合' : '練習') + '　' + a.venue + '\n'; }); }
+    if (r.wdWarn.length) { warn = true; body += '\n【⚠ 曜日ずれ（アプリで日付を確認してください）】\n'; r.wdWarn.forEach(function(a){ body += '　' + a.wdWarn + '（' + a.grade + '）\n'; }); }
+    if (r.changed.length) { body += '\n【予定表と違いがある日程（アプリで★の方が反映／無視を選べます）】\n'; r.changed.forEach(function(c){ body += '　' + md(c.date) + ' ' + c.grade + '：' + c.from + ' → ' + c.to + '\n'; }); }
+    if (r.missing.length) { body += '\n【最新の予定表に載っていない日程（自動では削除していません）】\n'; r.missing.forEach(function(s){ body += '　' + md(s.date) + ' ' + s.grade + '　' + s.venue + '\n'; }); }
+  });
+  body += '\n出欠・配車・当番の入力は変更していません。';
+  const to = Session.getEffectiveUser().getEmail();
+  if (to) MailApp.sendEmail(to, (warn ? '【要確認】' : '') + 'FC熊野 予定表を取り込みました', body);
 }

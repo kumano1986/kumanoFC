@@ -1459,13 +1459,80 @@ function _filterOutRecentlyDeletedScheds(schedArr) {
   });
 }
 
+// ===== 予定表の自動取り込みで付いた印 =====
+function _yoteiNoticeHtml(s) {
+  var admin = isAdmin();
+  var box = function(bg, bd, co, body, btns) {
+    return '<div style="background:'+bg+';border:1px solid '+bd+';border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px;line-height:1.6;color:'+co+';">' +
+      body + (admin && btns ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">' + btns + '</div>' : '') + '</div>';
+  };
+  var btn = function(cls, label, primary) {
+    return '<button class="'+cls+'" data-sid="'+s.id+'" style="font-size:12px;font-weight:700;padding:4px 12px;border-radius:6px;cursor:pointer;' +
+      (primary ? 'background:#2d7a4f;color:white;border:1px solid #2d7a4f;' : 'background:white;color:#555;border:1px solid #ccc;') + '">'+label+'</button>';
+  };
+  var html = '';
+  if (s.dateWarn) {
+    html += box('#fff4e5', '#f5c27a', '#8a5300',
+      '<b>⚠ 曜日ずれ</b>　' + s.dateWarn + (admin ? '<br>日付が違う場合は ✏️ で日付を直してください。' : ''),
+      btn('yotei-ack-date-btn', '確認した', false));
+  }
+  if (s.pendingUpdate) {
+    var pu = s.pendingUpdate;
+    var typeChange = (pu.oldSchedType || '練習') !== pu.schedType;
+    html += box('#eef5ff', '#a9c8f0', '#1d4f91',
+      '<b>📩 最新の予定表と違いがあります</b><br>' +
+      '今：' + (pu.oldVenue || s.venue) + (typeChange ? '（' + (pu.oldSchedType || '練習') + '）' : '') + '<br>' +
+      '予定表：<b>' + pu.venue + '</b>' + (typeChange ? '（' + pu.schedType + '）' : ''),
+      btn('yotei-apply-btn', '予定表に合わせる', true) + btn('yotei-ignore-btn', '今のままにする', false));
+  }
+  if (s.srcMissing) {
+    html += box('#f5f5f5', '#ddd', '#555',
+      '<b>📩 最新の予定表に載っていません</b>（中止・変更の可能性があります）' + (admin ? '<br>不要なら 🗑 で削除してください。' : ''),
+      btn('yotei-ack-missing-btn', '確認した', false));
+  }
+  return html;
+}
+function _updateSched(sid, fn) {
+  if (!isAdmin()) { showToast('★付き家族のみ操作できます'); return; }
+  var scheds = getSchedules();
+  var s = scheds.find(function(x){ return x.id === sid; });
+  if (!s) return;
+  fn(s);
+  saveSchedules(scheds);
+  renderAttendancePage();
+  if (typeof renderDutyPage === 'function') renderDutyPage();
+}
+function yoteiApplyUpdate(sid) {
+  _updateSched(sid, function(s) {
+    var pu = s.pendingUpdate; if (!pu) return;
+    s.venue = pu.venue; s.schedType = pu.schedType; s.matchName = pu.matchName || ''; s.note = pu.note || '';
+    s.pendingUpdate = null;
+  });
+  showToast('予定表の内容に合わせました（出欠はそのままです）');
+}
+function yoteiIgnoreUpdate(sid) {
+  _updateSched(sid, function(s) { if (s.pendingUpdate) s.pendingIgnore = s.pendingUpdate.sig; s.pendingUpdate = null; });
+  showToast('今の内容のままにしました');
+}
+function yoteiAckDate(sid) {
+  _updateSched(sid, function(s) { s.dateWarnAck = s.dateWarn; s.dateWarn = null; });
+}
+function yoteiAckMissing(sid) {
+  _updateSched(sid, function(s) { s.srcMissingAck = true; s.srcMissing = null; });
+}
+function _padTime(t) { return /^\d:\d{2}$/.test(t) ? '0' + t : t; }
+
 // ===== 日程編集 =====
 function showEditScheduleModal(sid) {
   var s = getSchedules().find(function(x){return x.id===sid;});
   if (!s) return;
   document.getElementById('edit-sched-id').value = sid;
   document.getElementById('edit-sched-date').value = s.date;
-  document.getElementById('edit-sched-grade').value = s.grade;
+  var gSel = document.getElementById('edit-sched-grade');
+  if (s.grade && !Array.from(gSel.options).some(function(o){ return o.value === s.grade; })) {
+    var gOpt = document.createElement('option'); gOpt.value = gOpt.text = s.grade; gSel.add(gOpt);
+  }
+  gSel.value = s.grade;
   document.getElementById('edit-sched-note').value = s.note || '';
   document.getElementById('edit-sched-carpool').checked = s.carpool || false;
   // 背景色を設定
@@ -1477,10 +1544,10 @@ function showEditScheduleModal(sid) {
 
   // venue から場所と時間を分離（例: "高島平多目的 8:50〜11:00"）
   var venue = s.venue || '';
-  var timeMatch = venue.match(/(\d{1,2}:\d{2})[〜~](\d{1,2}:\d{2})/);
-  var place = timeMatch ? venue.replace(/\s*\d{1,2}:\d{2}[〜~]\d{1,2}:\d{2}/, '').trim() : venue;
-  var tStart = timeMatch ? timeMatch[1] : '';
-  var tEnd   = timeMatch ? timeMatch[2] : '';
+  var timeMatch = venue.match(/(\d{1,2}:\d{2})\s*[〜~]\s*(\d{1,2}:\d{2})?/);
+  var place = timeMatch ? venue.replace(timeMatch[0], '').trim() : venue;
+  var tStart = timeMatch ? _padTime(timeMatch[1]) : '';
+  var tEnd   = timeMatch && timeMatch[2] ? _padTime(timeMatch[2]) : '';
 
   // 場所プルダウンを更新
   var sel = document.getElementById('edit-sched-venue');
@@ -1533,6 +1600,7 @@ function saveEditSchedule() {
   var scheds = getSchedules();
   var s = scheds.find(function(x){return x.id===sid;});
   if (s) {
+    if (s.dateWarn && s.date !== date) { s.dateWarnAck = s.dateWarn; s.dateWarn = null; }
     s.date = date;
     s.grade = grade;
     s.venue = venue;
@@ -2719,6 +2787,7 @@ function renderAttendancePage() {
             '</div>') +
           '</div>' +
         '</div>' +
+        _yoteiNoticeHtml(s) +
         (isCollapsed ? '' :
         // 詳細情報：アイコン付き行
         '<div style="background:#f8faf9;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:14px;line-height:1.9;">' +
@@ -3734,6 +3803,14 @@ document.addEventListener('click', function(e) {
   if (dc) { clearDuty(dc.dataset.sid); return; }
   var gd = e.target.closest('.grade-duty-btn');
   if (gd) { toggleGradeDuty(gd.dataset.sid); return; }
+  var ya = e.target.closest('.yotei-apply-btn');
+  if (ya) { yoteiApplyUpdate(ya.dataset.sid); return; }
+  var yi = e.target.closest('.yotei-ignore-btn');
+  if (yi) { yoteiIgnoreUpdate(yi.dataset.sid); return; }
+  var yd = e.target.closest('.yotei-ack-date-btn');
+  if (yd) { yoteiAckDate(yd.dataset.sid); return; }
+  var ym = e.target.closest('.yotei-ack-missing-btn');
+  if (ym) { yoteiAckMissing(ym.dataset.sid); return; }
 });
 document.addEventListener('change', function(e) {
   var ds = e.target.closest('.cp-drive-sel');
