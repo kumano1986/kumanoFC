@@ -3415,18 +3415,36 @@ async function sharePDF() {
   } catch(e) { window.print(); }
 }
 function buildShareText(date, grade) {
-  let txt = `⚽ FC熊野 試合結果\n📅 ${date}\n${'─'.repeat(20)}\n`;
+  const line = '-'.repeat(24);
+  // 日付 YYYY-MM-DD → M/D
+  let md = '';
+  if (date) { const p = date.split('-'); if (p.length === 3) md = (+p[1]) + '/' + (+p[2]); }
+  let txt = `⚽ FC熊野 試合結果報告${md ? ' (' + md + ')' : ''}\n`;
+  txt += `✅ 勝利　❌ 敗北　🤝 引き分け\n`;
+  txt += `⚽ 得点者\n`;
+  txt += `${line}\n`;
+  let win = 0, lose = 0, draw = 0;
   matches.forEach(m => {
-    const k=totalK(m), o=totalO(m);
-    const res = k>o?'✅勝利':k<o?'❌敗北':'🤝引き分け';
-    txt += `\n【第${m.num}試合】${m.opponent?'vs '+m.opponent:''} ${res}\n`;
-    txt += `　FC熊野 ${k} - ${o} ${m.opponent||'相手'}\n`;
+    const k = totalK(m), o = totalO(m);
+    const hasPK = m.scores.pk_k + m.scores.pk_o > 0;
+    let res;
+    if (k > o)       { res = '✅勝利'; win++; }
+    else if (k < o)  { res = '❌敗北'; lose++; }
+    else if (hasPK && m.scores.pk_k > m.scores.pk_o) { res = '✅勝利(PK)'; win++; }
+    else if (hasPK && m.scores.pk_k < m.scores.pk_o) { res = '❌敗北(PK)'; lose++; }
+    else             { res = '🤝引き分け'; draw++; }
+    const opp = m.opponent || '相手';
+    txt += `【第${m.num}試合】vs ${opp}${res}\n`;
+    if (m.venue) txt += `　🏆 ${m.venue}\n`;   // 試合名
+    txt += `　FC熊野 ${k} - ${o} ${opp}\n`;
     txt += `　(前半${m.scores.h1_k}-${m.scores.h1_o} / 後半${m.scores.h2_k}-${m.scores.h2_o}`;
-    if(m.scores.pk_k+m.scores.pk_o>0) txt+=` / PK${m.scores.pk_k}-${m.scores.pk_o}`;
+    if (hasPK) txt += ` / PK${m.scores.pk_k}-${m.scores.pk_o}`;
     txt += `)\n`;
     const snames = m.scorers.map(s=>{const p=players.find(p=>p.id==s.playerId);return p?p.name:'';}).filter(Boolean);
-    if(snames.length) txt+=`　⚽ ${snames.join('、')}\n`;
+    if (snames.length) txt += `　⚽ 得点者: ${snames.join('、')}\n`;
+    txt += `${line}\n`;
   });
+  txt += `本日は${win}勝${lose}敗${draw}分でした。皆様応援ありがとうございました！⚽`;
   return txt;
 }
 
