@@ -309,7 +309,11 @@ function getSheet(name) {
 }
 
 // ===== 削除マーカー（tombstone）: 削除した項目が他端末の古いデータで復活するのを防ぐ =====
-const TOMBSTONE_TTL_MS = 10 * 60 * 1000; // 10分間、削除を記憶しておく
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30日間、削除を記憶しておく
+// ※以前は10分だった。数分〜数十分アプリを開いていなかった別端末が
+// 「削除される前の古いローカルデータ」を後から一括送信(saveMaster)すると、
+// 10分のtombstoneがとっくに期限切れになっていて削除済みの日程が復活してしまっていた。
+// 家族の端末が数日〜数週間開かれないことも普通にあるため、大幅に延長する。
 
 function getTombstoneMap(existing, category) {
   if (!existing._deleted) existing._deleted = {};

@@ -437,12 +437,6 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">出欠確認タブのすべての日程カードを削除します。出欠データも合わせてリセットされます。</div>
         <button type="button" class="btn btn-full" onclick="deleteAllSchedules()" style="background:#888;color:white;font-weight:700;border:none;cursor:pointer;">🗑 全日程を削除する</button>
       </div>
-      <!-- 累計当番回数のリセット -->
-      <div class="card">
-        <div class="card-title">🔔 累計当番回数のリセット</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">不具合で累計がずれた場合に、現在の当番割り当てから正しい回数に計算し直します。割り当て済みの当番や出欠データには影響しません。</div>
-        <button type="button" class="btn btn-full" onclick="resetDutyTotals()" style="background:#e6a817;color:white;font-weight:700;border:none;cursor:pointer;">🔔 累計を正しく計算し直す</button>
-      </div>
       <!-- アプリのリセット -->
       <div class="card">
         <div class="card-title">🔄 アプリのリセット</div>
@@ -728,15 +722,11 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
 <div id="page-duty" class="page">
   <div class="card">
     <div class="card-title">当番割当</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">
-      条件：当日◯ かつ 翌日程も◯の方が候補。累計回数が少ない順にサジェスト。
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.6;">
+      候補：当日と次に予定がある日の両方が◯の家族（●・△・×・未入力は対象外）。最後の日程は当日◯の家族。<br>
+      同じ日に予定が複数ある場合は、その日の当番は同じ家族がまとめて担当します。（ ）内はこれまでの当番日数で、少ない家族に★を付けています。
     </div>
     <div id="duty-list"></div>
-  </div>
-  <div class="card">
-    <div class="card-title">累計当番回数</div>
-    <div id="duty-monthly"></div>
-  </div>
 </div>
 
 <!-- ===== まとめ ===== -->
@@ -3450,16 +3440,17 @@ function saveDutyData(d) {
   pushMasterNow(); // マスタ経由で即時送信
 }
 
+// 同じ日の日程ID一覧（同じ日に予定が複数ある場合は、同じ家族がまとめて当番を担当する）
+function _sameDaySchedIds(sid) {
+  var scheds = getSchedules().filter(function(s){return !s.archived;});
+  var t = scheds.find(function(s){return s.id===sid;});
+  if (!t) return [sid];
+  return scheds.filter(function(s){return s.date===t.date;}).map(function(s){return s.id;});
+}
+
 function assignDuty(sid, name) {
   var d = getDutyData();
-  var prev = d[sid]; // 前の担当
-  // 累計カウント更新：前の担当がいれば-1、新担当を+1
-  var totals = getDutyTotals();
-  if (prev && prev !== name && totals[prev] > 0) totals[prev]--;
-  if (prev !== name) totals[name] = (totals[name] || 0) + 1;
-  d[sid] = name;
-  // 両方をローカル保存してから1回だけ送信（レース防止）
-  localStorage.setItem('fc_duty_total', JSON.stringify(totals));
+  _sameDaySchedIds(sid).forEach(function(id){ d[id] = name; });
   localStorage.setItem('fc_duty', JSON.stringify(d));
   _dutyEditTime = Date.now();
   pushMasterNow();
@@ -3469,12 +3460,7 @@ function assignDuty(sid, name) {
 
 function clearDuty(sid) {
   var d = getDutyData();
-  var prev = d[sid];
-  var totals = getDutyTotals();
-  if (prev && totals[prev] > 0) totals[prev]--;
-  delete d[sid];
-  // 両方をローカル保存してから1回だけ送信
-  localStorage.setItem('fc_duty_total', JSON.stringify(totals));
+  _sameDaySchedIds(sid).forEach(function(id){ delete d[id]; });
   localStorage.setItem('fc_duty', JSON.stringify(d));
   _dutyEditTime = Date.now();
   pushMasterNow();
@@ -3530,51 +3516,80 @@ function toggleCollapse(sid) {
   renderAttendancePage();
 }
 
-// 当番候補を求める：当日◯ かつ 翌日程も◯
-function getDutyCandidates(sid) {
-  var scheds = getSchedules().filter(function(s){return !s.archived;});
-  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
-  var idx = scheds.findIndex(function(s){return s.id===sid;});
-  if (idx < 0) return [];
-  var attData = getAttendanceData();
-  var curAtt = attData[sid] || {};
-  // 当日◯の家族のみ当番候補。●（当番不可）は除外
+// 日付文字列(YYYY-MM-DD)の翌日
+function _nextDateStr(dateStr) {
+  var p = dateStr.split('-');
+  var d = new Date(Date.UTC(+p[0], +p[1]-1, +p[2]));
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+// その日のどれかの予定で◯か（●・△・×・未入力は◯扱いしない）
+function _hasMaruOnDay(daySchedIds, attData, p) {
+  return daySchedIds.some(function(id){ return (attData[id] || {})[p] === '◯'; });
+}
+// その日のどれかの予定で●（当番不可）を付けているか
+function _hasKuroOnDay(daySchedIds, attData, p) {
+  return daySchedIds.some(function(id){ return (attData[id] || {})[p] === '●'; });
+}
+// 当番候補（日単位）：当日◯ かつ 次に予定がある日も◯。
+// 次に予定がある日がない（最後の日程）場合は、当日◯だけで候補とする。当日に●を付けた家族は除外。
+function _nextSchedDate(date, scheds) {
+  var later = scheds.map(function(s){return s.date;}).filter(function(d){return d > date;}).sort();
+  return later.length ? later[0] : '';
+}
+function getDutyCandidatesForDate(date, scheds, attData) {
+  var dayIds  = scheds.filter(function(s){return s.date===date;}).map(function(s){return s.id;});
+  var nextDate = _nextSchedDate(date, scheds);
+  var nextIds = nextDate ? scheds.filter(function(s){return s.date===nextDate;}).map(function(s){return s.id;}) : [];
   return getParents().filter(function(p) {
-    return curAtt[p] === '◯';
+    if (!_hasMaruOnDay(dayIds, attData, p)) return false;
+    if (_hasKuroOnDay(dayIds, attData, p)) return false;
+    if (nextIds.length && !_hasMaruOnDay(nextIds, attData, p)) return false;
+    return true;
   });
 }
+// 互換用（日程IDから）
+function getDutyCandidates(sid) {
+  var scheds = getSchedules().filter(function(s){return !s.archived;});
+  var t = scheds.find(function(s){return s.id===sid;});
+  if (!t) return [];
+  return getDutyCandidatesForDate(t.date, scheds, getAttendanceData());
+}
 
-// 各家族の累計当番回数
+// 各家族の当番日数（同じ日に複数予定があっても1日=1回で数える）
 function getDutyCounts() {
   var d = getDutyData();
+  var scheds = getSchedules();
   var counts = {};
   getParents().forEach(function(p){ counts[p] = 0; });
-  Object.values(d).forEach(function(name){
+  var seen = {};
+  Object.keys(d).forEach(function(sid){
+    var name = d[sid];
+    var s = scheds.find(function(x){return x.id===sid;});
+    var key = (s ? s.date : sid) + '|' + name;
+    if (seen[key]) return;
+    seen[key] = true;
     if (counts[name] !== undefined) counts[name]++;
   });
   return counts;
 }
 
-// 月別当番回数
-function getDutyMonthly() {
-  var d = getDutyData();
-  var scheds = getSchedules();
-  var monthly = {}; // {月: {家族: 回数}}
-  Object.entries(d).forEach(function(entry) {
-    var sid = entry[0], name = entry[1];
-    var s = scheds.find(function(x){return x.id===sid;});
-    if (!s) return;
-    var month = s.date.substring(0, 7); // YYYY-MM
-    if (!monthly[month]) monthly[month] = {};
-    monthly[month][name] = (monthly[month][name] || 0) + 1;
-  });
-  return monthly;
+// 場所・時間を venue から分離（例:「高島平多目的 8:50〜11:00」）
+function _splitVenue(venue) {
+  venue = venue || '';
+  var m = venue.match(/(\d{1,2}:\d{2})\s*[〜~]\s*(\d{1,2}:\d{2})?/);
+  if (!m) return { place: venue.trim(), time: '', start: '' };
+  return {
+    place: venue.replace(m[0], '').trim(),
+    time: m[1] + '〜' + (m[2] || ''),
+    start: m[1].length === 4 ? '0' + m[1] : m[1]
+  };
 }
 
 function renderDutyPage() {
   var scheds = getSchedules().filter(function(s){return !s.archived;});
-  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
   var dutyData = getDutyData();
+  var attData = getAttendanceData();
   var counts = getDutyCounts();
   var weekdays = ['日','月','火','水','木','金','土'];
   var el = document.getElementById('duty-list');
@@ -3582,80 +3597,93 @@ function renderDutyPage() {
 
   if (!scheds.length) {
     el.innerHTML = '<div class="empty-state">日程がありません</div>';
-  } else {
-    var html = '';
-    scheds.forEach(function(s) {
-      var dateObj = new Date(s.date);
-      var wd = weekdays[dateObj.getDay()];
-      var dateLabel = s.date.replace(/^2026-/,'').replace(/-/,'/') + '(' + wd + ')';
-      var assigned = dutyData[s.id] || '';
-      var candidates = getDutyCandidates(s.id);
-      // 候補を累計回数昇順でソート（最少優先）
-      candidates.sort(function(a,b){ return (counts[a]||0) - (counts[b]||0); });
-      var suggested = candidates.length > 0 ? candidates[0] : '';
-
-      var candidateButtons = candidates.map(function(p) {
-        var isSuggested = p === suggested;
-        var isAssigned = p === assigned;
-        var bg = isAssigned ? '#2d7a4f' : isSuggested ? '#e8f5ee' : '#f5f5f5';
-        var co = isAssigned ? 'white' : isSuggested ? '#2d7a4f' : '#888';
-        var bd = isAssigned ? '#2d7a4f' : isSuggested ? '#a8d5b8' : '#e0e0e0';
-        return '<button class="duty-assign-btn" data-sid="'+s.id+'" data-name="'+p+'" style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+bd+';background:'+bg+';color:'+co+';margin:2px;">' +
-          p + '（'+counts[p]+'回）' + (isSuggested&&!isAssigned?' ★':'') +
-        '</button>';
-      }).join('');
-
-      html +=
-        '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
-            '<div>' +
-              '<span style="font-size:14px;font-weight:700;color:var(--green);">' + dateLabel + '</span>' +
-              '<span style="font-size:12px;color:var(--text-muted);margin-left:6px;">' + s.grade + '</span>' +
-            '</div>' +
-            (assigned
-              ? '<div style="display:flex;align-items:center;gap:6px;">' +
-                  '<span style="background:#2d7a4f;color:white;border-radius:6px;font-size:12px;font-weight:700;padding:2px 10px;">当番: '+assigned+'</span>' +
-                  '<button class="duty-clear-btn" data-sid="'+s.id+'" style="background:none;border:none;color:#ccc;font-size:13px;cursor:pointer;">✕</button>' +
-                '</div>'
-              : '<span style="font-size:11px;color:#ccc;">未確定</span>') +
-          '</div>' +
-          '<div style="margin-bottom:6px;">' +
-            '<button class="grade-duty-btn" data-sid="'+s.id+'" style="border-radius:6px;font-size:12px;font-weight:700;padding:5px 14px;cursor:pointer;border:1.5px solid '+(s.gradeDuty?'#c8202f':'#f5c0bb')+';background:'+(s.gradeDuty?'#fde3e5':'white')+';color:#c8202f;">' +
-              (s.gradeDuty?'✓ ':'') + '学年当番' +
-            '</button>' +
-          '</div>' +
-          (candidates.length > 0
-            ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">候補（★ = 推奨）</div>' +
-              '<div style="display:flex;flex-wrap:wrap;gap:2px;">' + candidateButtons + '</div>'
-            : '<div style="font-size:12px;color:#e6a817;background:#fef9e7;border-radius:6px;padding:5px 10px;">⚠ 候補なし（出欠未入力の可能性）</div>') +
-        '</div>';
-    });
-    el.innerHTML = html;
-  }
-
-  // 累計当番回数（日程を削除しても残る）
-  var totals = getDutyTotals();
-  // 現在の当番割当分もマージ（累計に未反映の可能性に備え、現データ優先ではなく累計を正とする）
-  var mel = document.getElementById('duty-monthly');
-  if (!mel) return;
-  var parents = getParents();
-  var hasAny = parents.some(function(p){ return (totals[p]||0) > 0; });
-  if (!hasAny) {
-    mel.innerHTML = '<div class="empty-state">当番を確定すると表示されます</div>';
     return;
   }
-  // 回数の多い順にソート
-  var sorted = parents.slice().sort(function(a,b){ return (totals[b]||0) - (totals[a]||0); });
-  var mhtml = '<div style="display:flex;flex-direction:column;gap:6px;">';
-  sorted.forEach(function(p) {
-    var cnt = totals[p] || 0;
-    mhtml += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:8px;background:' + (cnt>0?'#e8f5ee':'#f7f7f7') + ';border:1px solid ' + (cnt>0?'#a8d5b8':'#eee') + ';">' +
-      '<span style="font-size:14px;font-weight:600;color:' + (cnt>0?'var(--text)':'#aaa') + ';">' + p + '</span>' +
-      '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:700;color:' + (cnt>0?'var(--green)':'#ccc') + ';">' + cnt + ' 回</span>' +
-    '</div>';
+  // 日付ごとにまとめる（同じ日は時間順）
+  var byDate = {};
+  scheds.forEach(function(s){ (byDate[s.date] = byDate[s.date] || []).push(s); });
+  var dates = Object.keys(byDate).sort();
+
+  var html = '';
+  dates.forEach(function(date) {
+    var daySch = byDate[date];
+    daySch.sort(function(a,b){ return _splitVenue(a.venue).start.localeCompare(_splitVenue(b.venue).start); });
+    var dateObj = new Date(date);
+    var wd = weekdays[dateObj.getDay()];
+    var dateLabel = date.replace(/^\d{4}-/,'').replace(/-/,'/') + '(' + wd + ')';
+    var firstSid = daySch[0].id;
+
+    // 割り当て済み（同じ日の中で担当が揃っていない古いデータは全員表示）
+    var assignedList = [];
+    daySch.forEach(function(s){ var a = dutyData[s.id]; if (a && assignedList.indexOf(a) < 0) assignedList.push(a); });
+    var assigned = assignedList.length === 1 ? assignedList[0] : '';
+
+    var candidates = getDutyCandidatesForDate(date, scheds, attData);
+    candidates.sort(function(a,b){ return (counts[a]||0) - (counts[b]||0); });
+    var minCnt = candidates.length ? (counts[candidates[0]]||0) : 0;
+
+    var candidateButtons = candidates.map(function(p) {
+      var isSuggested = (counts[p]||0) === minCnt;
+      var isAssigned = p === assigned;
+      var bg = isAssigned ? '#2d7a4f' : isSuggested ? '#e8f5ee' : '#f5f5f5';
+      var co = isAssigned ? 'white' : isSuggested ? '#2d7a4f' : '#888';
+      var bd = isAssigned ? '#2d7a4f' : isSuggested ? '#a8d5b8' : '#e0e0e0';
+      return '<button class="duty-assign-btn" data-sid="'+firstSid+'" data-name="'+p+'" style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+bd+';background:'+bg+';color:'+co+';margin:2px;">' +
+        p + '（'+(counts[p]||0)+'回）' + (isSuggested&&!isAssigned?' ★':'') +
+      '</button>';
+    }).join('');
+
+    // 予定ごとの行：学年・練習/試合・場所・時間・学年当番
+    var schedRows = daySch.map(function(s) {
+      var v = _splitVenue(s.venue);
+      var isMatch = s.schedType === '試合';
+      var typeLabel = isMatch ? ('🏆 試合' + (s.matchName ? '（'+s.matchName+'）' : '')) : '⚽ 練習';
+      return '<div style="background:#f8faf9;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px;line-height:1.7;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;">' +
+          '<div style="font-weight:700;color:var(--text);">' + s.grade +
+            '<span style="margin-left:8px;font-size:12px;font-weight:700;padding:1px 8px;border-radius:5px;' + (isMatch ? 'background:#fff4d6;color:#a86b00;' : 'background:#e8f5ee;color:#2d7a4f;') + '">' + typeLabel + '</span>' +
+          '</div>' +
+          '<button class="grade-duty-btn" data-sid="'+s.id+'" style="border-radius:6px;font-size:11px;font-weight:700;padding:3px 10px;cursor:pointer;border:1.5px solid '+(s.gradeDuty?'#c8202f':'#f5c0bb')+';background:'+(s.gradeDuty?'#fde3e5':'white')+';color:#c8202f;">' +
+            (s.gradeDuty?'✓ ':'') + '学年当番' +
+          '</button>' +
+        '</div>' +
+        (v.place ? '<div>📍 ' + v.place + '</div>' : '') +
+        (v.time  ? '<div>🕐 ' + v.time  + '</div>' : '') +
+      '</div>';
+    }).join('');
+
+    var assignedHtml = assigned
+      ? '<div style="display:flex;align-items:center;gap:6px;">' +
+          '<span style="background:#2d7a4f;color:white;border-radius:6px;font-size:12px;font-weight:700;padding:2px 10px;">当番: '+assigned+'</span>' +
+          '<button class="duty-clear-btn" data-sid="'+firstSid+'" style="background:none;border:none;color:#ccc;font-size:13px;cursor:pointer;">✕</button>' +
+        '</div>'
+      : assignedList.length > 1
+        ? '<div style="display:flex;align-items:center;gap:6px;">' +
+            '<span style="background:#fef9e7;color:#a86b00;border-radius:6px;font-size:11px;font-weight:700;padding:2px 8px;">当番が分かれています: '+assignedList.join('・')+'</span>' +
+            '<button class="duty-clear-btn" data-sid="'+firstSid+'" style="background:none;border:none;color:#ccc;font-size:13px;cursor:pointer;">✕</button>' +
+          '</div>'
+        : '<span style="font-size:11px;color:#ccc;">未確定</span>';
+
+    html +=
+      '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+          '<div>' +
+            '<span style="font-size:14px;font-weight:700;color:var(--green);">' + dateLabel + '</span>' +
+            (daySch.length > 1 ? '<span style="font-size:11px;color:var(--text-muted);margin-left:6px;">予定' + daySch.length + '件・同じ家族が担当</span>' : '') +
+            (function(){ var nd = _nextSchedDate(date, scheds); if (!nd) return '<div style="font-size:11px;color:var(--text-muted);">次の予定なし（当日◯で候補）</div>';
+              var nw = weekdays[new Date(nd).getDay()];
+              return '<div style="font-size:11px;color:var(--text-muted);">次の予定：' + nd.replace(/^\d{4}-/,'').replace(/-/,'/') + '(' + nw + ')</div>'; })() +
+          '</div>' +
+          assignedHtml +
+        '</div>' +
+        schedRows +
+        (candidates.length > 0
+          ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">候補（★ = 当番日数が少ない家族）</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:2px;">' + candidateButtons + '</div>'
+          : '<div style="font-size:12px;color:#e6a817;background:#fef9e7;border-radius:6px;padding:5px 10px;">⚠ 候補なし（当日と次に予定がある日の両方が◯の家族がいません）</div>') +
+      '</div>';
   });
-  mhtml += '</div>';
-  mel.innerHTML = mhtml;
+  el.innerHTML = html;
 }
 
 // ===== 出欠・配車イベント委譲 =====
