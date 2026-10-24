@@ -1142,6 +1142,19 @@ function getSchedules() {
   // deleted:true の日程は「削除済み」印。どの画面にも出さない
   return JSON.parse(localStorage.getItem('fc_schedules') || '[]').filter(function(s){ return s && !s.deleted; });
 }
+// 日程の並び順：日付 → 開始時刻（早い順）。時刻のない日程はその日の最後（「PM」は12:00扱い）
+function _schedStartKey(s) {
+  var v = (s && s.venue) || '';
+  var m = v.match(/(\d{1,2}):(\d{2})\s*[〜~]/) || v.match(/(\d{1,2}):(\d{2})/);
+  if (m) return ('0' + m[1]).slice(-2) + ':' + m[2];
+  if (/PM|午後/i.test(v)) return '12:00';
+  return '99:99';
+}
+function _schedCompare(a, b) {
+  var d = (a.date || '').localeCompare(b.date || '');
+  if (d) return d;
+  return _schedStartKey(a).localeCompare(_schedStartKey(b));
+}
 // 新しい日程ID：削除済みIDと絶対に重ならないよう、末尾に時刻ベースの一意な値を付ける
 // （同じ日付・学年で作り直した日程が、削除マーカーに巻き込まれて消えるのを防ぐ）
 var _schedIdSeq = 0;
@@ -1785,7 +1798,7 @@ function addSchedule() {
   var id = _newSchedId(date, grade);
   var scheds = getSchedules();
   scheds.push({id:id, date:date, grade:grade, venue:venue, note:finalNote, carpool:carpool, schedType:schedType, matchName:matchName, archived:false, locked:false, _createdAt: Date.now()});
-  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
+  scheds.sort(_schedCompare);
   // 現在の日程IDだけに絞り込む
   var validIds = scheds.map(function(s){return s.id;});
   var attData = getAttendanceData();
@@ -1947,7 +1960,7 @@ function importFromExcel() {
     scheds.push({id:id, date:r.date, grade:r.grade, venue:r.venue, note:'', carpool:false, archived:false, locked:false});
     added++;
   });
-  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
+  scheds.sort(_schedCompare);
   saveSchedules(scheds);
   closeModal('modal-add-schedule');
   renderAttendancePage();
@@ -2481,7 +2494,7 @@ function startAutoSync() {
           });
           if (localOnly.length > 0) {
             var merged = cloudScheds.concat(localOnly);
-            merged.sort(function(a,b){ return a.date.localeCompare(b.date); });
+            merged.sort(_schedCompare);
             localStorage.setItem('fc_schedules', JSON.stringify(merged));
           } else {
             localStorage.setItem('fc_schedules', nw);
@@ -2611,7 +2624,7 @@ function renderAttendancePage() {
     return;
   }
   var scheds = getSchedules().filter(function(s){return !s.archived;});
-  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
+  scheds.sort(_schedCompare);
   var attData  = getAttendanceData();
   var cpData   = getCarpoolData();
   var weekdays = ['日','月','火','水','木','金','土'];
@@ -2791,7 +2804,7 @@ function renderOverviewPage() {
   var el = document.getElementById('overview-list');
   if (!el) return;
   var scheds = getSchedules().filter(function(s){return !s.archived;});
-  scheds.sort(function(a,b){return a.date.localeCompare(b.date);});
+  scheds.sort(_schedCompare);
   if (!scheds.length) {
     el.innerHTML = '<div class="empty-state">日程がありません</div>';
     return;
@@ -3681,7 +3694,7 @@ function renderDutyPage() {
   var html = '';
   dates.forEach(function(date) {
     var daySch = byDate[date];
-    daySch.sort(function(a,b){ return _splitVenue(a.venue).start.localeCompare(_splitVenue(b.venue).start); });
+    daySch.sort(_schedCompare);
     var dateObj = new Date(date);
     var wd = weekdays[dateObj.getDay()];
     var dateLabel = date.replace(/^\d{4}-/,'').replace(/-/,'/') + '(' + wd + ')';
