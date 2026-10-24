@@ -2845,32 +2845,37 @@ function renderOverviewPage() {
       if (att[p]==='◯'||att[p]==='●') totalPlayers += (famPlayers[p]!==undefined?parseInt(famPlayers[p]):1);
     });
     var assigned = dutyData[s.id] || '';
-    var typeLabel = s.schedType === '試合' ? ('🏆 試合' + (s.matchName?'（'+s.matchName+'）':'')) : '⚽ 練習';
+    var pad = function(t){ return t.replace(/(^|〜)(\d):/g, function(m, a, h){ return a + '0' + h + ':'; }); }; // 8:00 → 08:00
+    var row = function(icon, body) {
+      return '<div style="display:flex;align-items:center;gap:12px;"><span style="width:22px;text-align:center;flex-shrink:0;font-size:17px;">' + icon + '</span><span>' + body + '</span></div>';
+    };
+    var typeBody = s.schedType === '試合' ? ('試合' + (s.matchName ? '（' + s.matchName + '）' : '')) : '練習';
+    var hasDutyBand = assigned || s.gradeDuty;
 
     html +=
-      '<div class="card" style="padding:16px;">' +
-        '<div style="font-size:22px;font-weight:800;color:var(--green);margin-bottom:10px;">' + dateLabel + '</div>' +
-        '<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
-          // 左列：詳細
-          '<div style="flex:1;min-width:180px;font-size:14px;line-height:2.0;">' +
-            '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">🎓</span><span>対象：' + s.grade + '</span></div>' +
-            (vPlace ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">📍</span><span>' + vPlace + '</span></div>' : '') +
-            (vTime ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">🕐</span><span>' + vTime + '</span></div>' : '') +
-            '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">' + (s.schedType==='試合'?'🏆':'⚽') + '</span><span>' + (s.schedType==='試合'?('試合'+(s.matchName?'（'+s.matchName+'）':'')):'練習') + '</span></div>' +
-            (s.carpool
-              ? '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">🚗</span><span style="color:#c8202f;font-weight:700;">配車あり</span></div>'
-              : '<div style="display:flex;align-items:center;gap:8px;"><span style="width:20px;text-align:center;flex-shrink:0;">🚗</span><span style="color:#aaa;">配車なし</span></div>') +
-          '</div>' +
-          // 右列：学年当番・当番・参加・出欠状況
-          '<div style="text-align:right;font-size:14px;line-height:2.0;min-width:150px;">' +
-            (s.gradeDuty ? '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;"><span>📣</span><span style="font-weight:700;color:#c8202f;">学年当番</span></div>' : '') +
-            (assigned ? '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;"><span>🔔</span><span style="font-weight:700;">当番：' + assigned + '</span></div>' : '') +
-            '<div style="height:14px;"></div>' +
-            '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;"><span>' + (s.schedType==='試合'?'⚽':'👥') + '</span><span style="font-weight:700;color:var(--green);">参加選手：' + totalPlayers + '名</span></div>' +
-            '<div style="font-size:12px;color:var(--text-muted);line-height:1.7;margin-top:2px;">' +
-              '出席 ' + attend + ' / 保留 ' + hold + ' / 欠席 ' + absent + ' / 未回答 ' + noreply +
-            '</div>' +
-          '</div>' +
+      '<div class="card" style="padding:18px 18px 14px;">' +
+        '<div style="font-size:26px;font-weight:800;color:var(--green);margin-bottom:10px;letter-spacing:0.5px;">' + dateLabel + '</div>' +
+        // 詳細
+        '<div style="font-size:15px;line-height:2.1;color:var(--text);margin-bottom:12px;">' +
+          row('🎓', '対象：' + s.grade) +
+          (vPlace ? row('📍', vPlace) : '') +
+          (vTime ? row('🕐', pad(vTime)) : '') +
+          row(s.schedType === '試合' ? '🏆' : '⚽', typeBody) +
+          row('🚗', s.carpool ? '<span style="color:#c8202f;font-weight:700;">配車あり</span>' : '配車なし') +
+        '</div>' +
+        // 当番の帯（当番か学年当番があるときだけ）
+        (hasDutyBand
+          ? '<div style="display:flex;align-items:center;gap:14px;background:#f4f5f4;border-top:1px solid #dcdfdc;border-bottom:1px solid #dcdfdc;padding:10px 12px;margin:0 -2px 12px;">' +
+              '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;font-size:15px;">' +
+                (assigned ? '<span>🔔 当番：<b>' + assigned + '</b></span>' : '<span style="color:#aaa;">🔔 当番：未定</span>') +
+                (s.gradeDuty ? '<span style="color:#c8202f;font-weight:700;">📣 学年当番</span>' : '') +
+              '</div>' +
+            '</div>'
+          : '<div style="border-top:1px solid #dcdfdc;margin-bottom:12px;"></div>') +
+        // 参加人数と出欠状況
+        '<div style="text-align:center;font-size:17px;font-weight:800;color:var(--text);margin-bottom:6px;">👥 参加選手：' + totalPlayers + '名</div>' +
+        '<div style="font-size:12.5px;color:var(--text-muted);">' +
+          '出席:' + attend + ' | 保留:' + hold + ' | 欠席:' + absent + ' | 未回答:' + noreply +
         '</div>' +
       '</div>';
   });
