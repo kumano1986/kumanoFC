@@ -346,7 +346,6 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
   <button onclick="showPage('attendance',this)">📅 出欠確認</button>
   <button onclick="showPage('overview',this)">📋 スケジュール</button>
   <button onclick="showPage('duty',this)">🔔 当番</button>
-  <button onclick="showPage('summary',this)">📊 まとめ</button>
 </div>
 
 <!-- ===== 設定モーダル ===== -->
@@ -519,7 +518,7 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
   <button class="btn btn-share btn-full" onclick="shareResult()" style="margin-top:14px;margin-bottom:8px;">① 📤 LINEで共有</button>
   <!-- ②試合結果を保存 -->
   <button class="btn btn-full" id="btn-finish-match" onclick="submitToSummary()" style="margin-bottom:8px;background:#e74c3c;color:white;font-weight:700;font-size:15px;padding:14px;border:none;border-radius:10px;cursor:pointer;">
-    ② 💾 試合結果を保存（まとめに記録）
+    ② 💾 試合結果を保存（スプレッドシートに記録）
   </button>
   <!-- ③入力内容を削除 -->
   <button class="btn btn-full" onclick="clearMatchInput()" style="background:#888;color:white;font-weight:700;font-size:14px;padding:12px;border:none;border-radius:10px;cursor:pointer;">
@@ -727,22 +726,6 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
       同じ日に予定が複数ある場合は、その日の当番は同じ家族がまとめて担当します。（ ）内はこれまでの当番日数で、少ない家族に★を付けています。
     </div>
     <div id="duty-list"></div>
-</div>
-
-<!-- ===== まとめ ===== -->
-<div id="page-summary" class="page">
-  <div class="card">
-    <div class="card-title">年度を選択</div>
-    <div class="nendo-tabs" id="nendo-tabs"></div>
-  </div>
-  <div class="card" id="summary-record">
-    <div class="card-title">年度累積 成績</div>
-    <div class="empty-state">試合データがありません</div>
-  </div>
-  <div class="card" id="summary-scorers">
-    <div class="card-title">年度累積 得点ランキング</div>
-    <div class="empty-state">得点データがありません</div>
-  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -2160,7 +2143,7 @@ async function saveMatches() {
   _lastSavedHash = '';
   var btn = document.getElementById('btn-finish-match');
   if (btn && !_isSaving && btn.innerHTML.indexOf('保存済み') >= 0) {
-    btn.innerHTML = '② 💾 試合結果を保存（まとめに記録）';
+    btn.innerHTML = '② 💾 試合結果を保存（スプレッドシートに記録）';
     btn.style.background = '#e74c3c';
   }
 }
@@ -2223,7 +2206,7 @@ async function submitToSummary() {
       btn.style.background = '#2d7a4f';
       btn.style.opacity = '1';
     }
-    showToast('✅ まとめタブに記録しました');
+    showToast('✅ スプレッドシート（年度累積）に記録しました');
     // 2秒後に「保存済み」表示へ
     setTimeout(function() {
       if (btn) {
@@ -2982,7 +2965,7 @@ var _i18n = {
     setting_delete: '🗑 日程の一括削除',
     setting_gas: '🔌 Google連携設定',
     add_match: '＋ 試合を追加',
-    finish_match: '② 💾 試合結果を保存（まとめに記録）',
+    finish_match: '② 💾 試合結果を保存（スプレッドシートに記録）',
     view_result: '🏆 試合結果を確認・共有',
     family_not_set: '家族が設定されていません',
     family_not_set_desc: '出欠確認を入力するにはまず家族を選択してください',
@@ -3126,7 +3109,6 @@ function applyLang() {
   if (tabs[1]) tabs[1].innerHTML = t('tab_attendance');
   if (tabs[2]) tabs[2].innerHTML = t('tab_overview');
   if (tabs[3]) tabs[3].innerHTML = t('tab_duty');
-  if (tabs[4]) tabs[4].innerHTML = t('tab_summary');
   var legend = document.getElementById('att-legend');
   if (legend) legend.textContent = t('attend_legend');
   var initText = document.getElementById('sync-init-text');
