@@ -723,7 +723,7 @@ input:focus, select:focus { outline: none; border-color: var(--green); backgroun
     <div class="card-title">当番割当</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.6;">
       候補：当日と次に予定がある日の両方が◯の家族（●・△・×・未入力は対象外）。最後の日程は当日◯の家族。<br>
-      同じ日に予定が複数ある場合は、その日の当番は同じ家族がまとめて担当します。（ ）内はこれまでの当番日数で、少ない家族に★を付けています。
+      同じ日に予定が複数ある場合は、その日の当番は同じ家族がまとめて担当します。緑色の家族がおすすめです。
     </div>
     <div id="duty-list"></div>
 </div>
@@ -2764,7 +2764,8 @@ function renderAttendancePage() {
               '<button class="collapse-btn" data-sid="'+s.id+'" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--green);padding:0 2px;flex-shrink:0;">' + (isCollapsed?'▶':'▼') + '</button>' +
               '<span style="font-size:19px;font-weight:800;color:var(--green);">' + dateLabel + '</span>' +
               lockBadge +
-              (assigned ? '<span style="background:#e8f5ee;color:#2d7a4f;border:1px solid #a8d5b8;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">当番:'+assigned+'</span>' : '') +
+              (assigned === DUTY_NONE ? '<span style="background:#f3f3f3;color:#888;border:1px solid #ddd;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">当番なし</span>'
+                : assigned ? '<span style="background:#e8f5ee;color:#2d7a4f;border:1px solid #a8d5b8;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">当番:'+assigned+'</span>' : '') +
               (s.gradeDuty ? '<span style="background:#fde3e5;color:#c8202f;border:1px solid #f5c0bb;border-radius:5px;font-size:11px;font-weight:700;padding:2px 8px;">学年当番</span>' : '') +
             '</div>' +
             '<div style="font-size:15px;color:var(--text);font-weight:700;margin-top:4px;padding-left:24px;">' + s.grade + (isCollapsed && vTime ? ' ・ '+vTime : '') + '</div>' +
@@ -2863,7 +2864,8 @@ function renderOverviewPage() {
         (hasDutyBand
           ? '<div style="display:flex;align-items:center;gap:14px;background:#f4f5f4;border-top:1px solid #dcdfdc;border-bottom:1px solid #dcdfdc;padding:10px 12px;margin:0 -2px 12px;">' +
               '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;font-size:15px;">' +
-                (assigned ? '<span>🔔 当番：<b>' + assigned + '</b></span>' : '<span style="color:#aaa;">🔔 当番：未定</span>') +
+                (assigned === DUTY_NONE ? '<span style="color:#888;">🔔 当番：なし</span>'
+                  : assigned ? '<span>🔔 当番：<b>' + assigned + '</b></span>' : '<span style="color:#aaa;">🔔 当番：未定</span>') +
                 (s.gradeDuty ? '<span style="color:#c8202f;font-weight:700;">📣 学年当番</span>' : '') +
               '</div>' +
             '</div>'
@@ -3518,6 +3520,7 @@ function buildShareText(date, grade) {
 }
 
 // ===== 当番 =====
+var DUTY_NONE = '__none__'; // 「当番なし」を選んだ日の印
 function getDutyData() {
   return JSON.parse(localStorage.getItem('fc_duty') || '{}');
 }
@@ -3652,6 +3655,7 @@ function getDutyCounts() {
   var seen = {};
   Object.keys(d).forEach(function(sid){
     var name = d[sid];
+    if (name === DUTY_NONE) return;
     var s = scheds.find(function(x){return x.id===sid;});
     var key = (s ? s.date : sid) + '|' + name;
     if (seen[key]) return;
@@ -3716,7 +3720,7 @@ function renderDutyPage() {
       var co = isAssigned ? 'white' : isSuggested ? '#2d7a4f' : '#888';
       var bd = isAssigned ? '#2d7a4f' : isSuggested ? '#a8d5b8' : '#e0e0e0';
       return '<button class="duty-assign-btn" data-sid="'+firstSid+'" data-name="'+p+'" style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+bd+';background:'+bg+';color:'+co+';margin:2px;">' +
-        p + '（'+(counts[p]||0)+'回）' + (isSuggested&&!isAssigned?' ★':'') +
+        p +
       '</button>';
     }).join('');
 
@@ -3739,14 +3743,21 @@ function renderDutyPage() {
       '</div>';
     }).join('');
 
-    var assignedHtml = assigned
+    var isNone = assigned === DUTY_NONE;
+    var isOutside = assigned && !isNone && candidates.indexOf(assigned) < 0;
+    var assignedHtml = isNone
       ? '<div style="display:flex;align-items:center;gap:6px;">' +
-          '<span style="background:#2d7a4f;color:white;border-radius:6px;font-size:12px;font-weight:700;padding:2px 10px;">当番: '+assigned+'</span>' +
+          '<span style="background:#f3f3f3;color:#888;border:1px solid #ddd;border-radius:6px;font-size:12px;font-weight:700;padding:2px 10px;">当番なし</span>' +
+          '<button class="duty-clear-btn" data-sid="'+firstSid+'" style="background:none;border:none;color:#ccc;font-size:13px;cursor:pointer;">✕</button>' +
+        '</div>'
+      : assigned
+      ? '<div style="display:flex;align-items:center;gap:6px;">' +
+          '<span style="background:#2d7a4f;color:white;border-radius:6px;font-size:12px;font-weight:700;padding:2px 10px;">当番: '+assigned+(isOutside?'（候補外）':'')+'</span>' +
           '<button class="duty-clear-btn" data-sid="'+firstSid+'" style="background:none;border:none;color:#ccc;font-size:13px;cursor:pointer;">✕</button>' +
         '</div>'
       : assignedList.length > 1
         ? '<div style="display:flex;align-items:center;gap:6px;">' +
-            '<span style="background:#fef9e7;color:#a86b00;border-radius:6px;font-size:11px;font-weight:700;padding:2px 8px;">当番が分かれています: '+assignedList.join('・')+'</span>' +
+            '<span style="background:#fef9e7;color:#a86b00;border-radius:6px;font-size:11px;font-weight:700;padding:2px 8px;">当番が分かれています: '+assignedList.map(function(a){ return a === DUTY_NONE ? '当番なし' : a; }).join('・')+'</span>' +
             '<button class="duty-clear-btn" data-sid="'+firstSid+'" style="background:none;border:none;color:#ccc;font-size:13px;cursor:pointer;">✕</button>' +
           '</div>'
         : '<span style="font-size:11px;color:#ccc;">未確定</span>';
@@ -3765,9 +3776,22 @@ function renderDutyPage() {
         '</div>' +
         schedRows +
         (candidates.length > 0
-          ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">候補（★ = 当番日数が少ない家族）</div>' +
+          ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">候補（緑色 = おすすめ）</div>' +
             '<div style="display:flex;flex-wrap:wrap;gap:2px;">' + candidateButtons + '</div>'
           : '<div style="font-size:12px;color:#e6a817;background:#fef9e7;border-radius:6px;padding:5px 10px;">⚠ 候補なし（当日と次に予定がある日の両方が◯の家族がいません）</div>') +
+        // 控えめな操作：候補以外の家族を選ぶ／当番なしにする
+        (function(){
+          var others = getParents().filter(function(p){ return candidates.indexOf(p) < 0; });
+          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;">' +
+            (others.length
+              ? '<select class="duty-other-sel" data-sid="'+firstSid+'" style="width:auto;max-width:62%;margin:0;font-size:11px;color:#999;background:transparent;border:1px dashed #ddd;border-radius:6px;padding:3px 6px;">' +
+                  '<option value="">他の家族を選ぶ…</option>' +
+                  others.map(function(p){ return '<option value="'+p+'">'+p+'</option>'; }).join('') +
+                '</select>'
+              : '<span></span>') +
+            (isNone ? '' : '<button class="duty-none-btn" data-sid="'+firstSid+'" style="background:none;border:none;color:#bbb;font-size:11px;text-decoration:underline;cursor:pointer;padding:2px 0;">当番なしにする</button>') +
+          '</div>';
+        })() +
       '</div>';
   });
   el.innerHTML = html;
@@ -3801,6 +3825,8 @@ document.addEventListener('click', function(e) {
   if (da) { assignDuty(da.dataset.sid, da.dataset.name); return; }
   var dc = e.target.closest('.duty-clear-btn');
   if (dc) { clearDuty(dc.dataset.sid); return; }
+  var dn = e.target.closest('.duty-none-btn');
+  if (dn) { if (confirm('この日を「当番なし」にしますか？')) assignDuty(dn.dataset.sid, DUTY_NONE); return; }
   var gd = e.target.closest('.grade-duty-btn');
   if (gd) { toggleGradeDuty(gd.dataset.sid); return; }
   var ya = e.target.closest('.yotei-apply-btn');
@@ -3817,6 +3843,13 @@ document.addEventListener('change', function(e) {
   if (ds) { setCarpoolDrive(ds.dataset.sid, ds.dataset.parent, ds.value); return; }
   var cn = e.target.closest('.cp-num');
   if (cn) { setCarpoolNum(cn.dataset.sid, cn.dataset.parent, cn.dataset.field, cn.value); return; }
+  var dos = e.target.closest('.duty-other-sel');
+  if (dos) {
+    var who = dos.value;
+    if (who && confirm(who + ' は当番の候補外（当日・次の予定のどちらかが◯ではない）です。\n当番にしますか？')) assignDuty(dos.dataset.sid, who);
+    else dos.value = '';
+    return;
+  }
   var fp = e.target.closest('.family-players-sel');
   if (fp) { setFamilyPlayers(fp.dataset.name, fp.value); renderFamilies(); }
 });
