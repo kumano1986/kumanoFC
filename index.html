@@ -1472,7 +1472,11 @@ function _yoteiNoticeHtml(s) {
       '<b>⚠ 曜日ずれ</b>　' + s.dateWarn + (admin ? '<br>日付が違う場合は ✏️ で日付を直してください。' : ''),
       btn('yotei-ack-date-btn', '確認した', false));
   }
-  if (s.pendingUpdate) {
+  // 時刻の書き方（8:45 と 08:45）だけの違いは「違い」として出さない
+  var canon = function(v){ return String(v || '').replace(/[\s\u3000]+/g, ' ').replace(/[~～]/g, '〜').replace(/\s*〜\s*/g, '〜')
+    .replace(/(^|[^\d])(\d):(\d{2})/g, function(m, pre, h, mm){ return pre + '0' + h + ':' + mm; }).trim(); };
+  var puSame = s.pendingUpdate && canon(s.pendingUpdate.venue) === canon(s.venue) && (s.pendingUpdate.schedType || '練習') === (s.schedType || '練習');
+  if (s.pendingUpdate && !puSame) {
     var pu = s.pendingUpdate;
     var typeChange = (pu.oldSchedType || '練習') !== pu.schedType;
     html += box('#eef5ff', '#a9c8f0', '#1d4f91',
